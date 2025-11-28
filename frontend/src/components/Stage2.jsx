@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './Stage2.css';
+import StageTimer from './StageTimer';
 
 function deAnonymizeText(text, labelToModel) {
   if (!labelToModel) return text;
@@ -14,7 +15,7 @@ function deAnonymizeText(text, labelToModel) {
   return result;
 }
 
-export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
+export default function Stage2({ rankings, labelToModel, aggregateRankings, startTime, endTime }) {
   const [activeTab, setActiveTab] = useState(0);
 
   if (!rankings || rankings.length === 0) {
@@ -26,7 +27,10 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
 
   return (
     <div className="stage stage2">
-      <h3 className="stage-title">Stage 2: Peer Rankings</h3>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+        <h3 className="stage-title" style={{ margin: 0 }}>Stage 2: Peer Rankings</h3>
+        <StageTimer startTime={startTime} endTime={endTime} label="Duration" />
+      </div>
 
       <h4>Raw Evaluations</h4>
       <p className="stage-description">
@@ -71,20 +75,20 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
             </div>
 
             {currentRanking.parsed_ranking &&
-             currentRanking.parsed_ranking.length > 0 && (
-              <div className="parsed-ranking">
-                <strong>Extracted Ranking:</strong>
-                <ol>
-                  {currentRanking.parsed_ranking.map((label, i) => (
-                    <li key={i}>
-                      {labelToModel && labelToModel[label]
-                        ? labelToModel[label].split('/')[1] || labelToModel[label]
-                        : label}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
+              currentRanking.parsed_ranking.length > 0 && (
+                <div className="parsed-ranking">
+                  <strong>Extracted Ranking:</strong>
+                  <ol>
+                    {currentRanking.parsed_ranking.map((label, i) => (
+                      <li key={i}>
+                        {labelToModel && labelToModel[label]
+                          ? labelToModel[label].split('/')[1] || labelToModel[label]
+                          : label}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
           </>
         )}
       </div>

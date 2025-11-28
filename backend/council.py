@@ -9,81 +9,91 @@ from .search import perform_web_search, SearchProvider
 from .settings import get_settings
 
 
+from .providers.openai import OpenAIProvider
+from .providers.anthropic import AnthropicProvider
+from .providers.google import GoogleProvider
+from .providers.mistral import MistralProvider
+from .providers.deepseek import DeepSeekProvider
+from .providers.openrouter import OpenRouterProvider
+from .providers.ollama import OllamaProvider
+
+# Initialize providers
+PROVIDERS = {
+    "openai": OpenAIProvider(),
+    "anthropic": AnthropicProvider(),
+    "google": GoogleProvider(),
+    "mistral": MistralProvider(),
+    "deepseek": DeepSeekProvider(),
+    "openrouter": OpenRouterProvider(),
+    "ollama": OllamaProvider(),
+}
+
+def get_provider_for_model(model_id: str) -> Any:
+    """Determine the provider for a given model ID."""
+    if ":" in model_id:
+        provider_name = model_id.split(":")[0]
+        if provider_name in PROVIDERS:
+            return PROVIDERS[provider_name]
+    
+    # Fallback logic for legacy/unprefixed IDs
+    settings = get_settings()
+    if settings.llm_provider == "ollama":
+        return PROVIDERS["ollama"]
+    elif settings.llm_provider == "openrouter":
+        return PROVIDERS["openrouter"]
+        
+    # Default to OpenRouter for unknown
+    return PROVIDERS["openrouter"]
+
+
 async def query_model(model: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
     """Dispatch query to appropriate provider."""
-    provider = get_llm_provider()
-    
-    if provider == "hybrid":
-        if model.startswith("ollama:"):
-            return await ollama_client.query_model(model.removeprefix("ollama:"), messages, timeout)
-        else:
-            return await openrouter.query_model(model, messages, timeout)
-            
-    if provider == "ollama":
-        # Ensure we strip the prefix if it exists (e.g. from a utility model setting)
-        clean_model = model.removeprefix("ollama:")
-        return await ollama_client.query_model(clean_model, messages, timeout)
-    return await openrouter.query_model(model, messages, timeout)
+    provider = get_provider_for_model(model)
+    return await provider.query(model, messages, timeout)
 
 
 async def query_models_parallel(models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
-    """Dispatch parallel query to appropriate provider."""
-    provider = get_llm_provider()
+    """Dispatch parallel query to appropriate providers."""
+    tasks = []
+    model_to_task_map = {}
     
-    if provider == "hybrid":
-        # Group models by provider
-        ollama_models = []
-        openrouter_models = []
-        
-        for model in models:
-            if model.startswith("ollama:"):
-                ollama_models.append(model)
-            else:
-                openrouter_models.append(model)
-        
-        tasks = []
-        # Create tasks for Ollama models
-        if ollama_models:
-            # Strip prefix for the actual call, but map back to full ID in result
-            tasks.append(_query_ollama_batch(ollama_models, messages))
-            
-        # Create task for OpenRouter models (it handles its own parallelism)
-        if openrouter_models:
-             tasks.append(openrouter.query_models_parallel(openrouter_models, messages))
-             
-        # Execute
-        results = await asyncio.gather(*tasks)
-        
-        # Merge results
-        combined_results = {}
-        for result_batch in results:
-            combined_results.update(result_batch)
-            
-        return combined_results
+    # Group models by provider to optimize batching if supported (mostly for OpenRouter/Ollama legacy)
+    # But for simplicity and modularity, we'll just spawn individual tasks for now
+    # OpenRouter and Ollama wrappers might handle their own internal concurrency if we called a batch method,
+    # but the base interface is single query.
+    # To maintain OpenRouter's batch efficiency if it exists, we could check type, but let's stick to simple asyncio.gather first.
+    
+    # Actually, the previous implementation used specific batch logic for Ollama and OpenRouter.
+    # We should preserve that if possible, OR just rely on asyncio.gather which is fine for HTTP clients.
+    # The previous `_query_ollama_batch` was just a helper to strip prefixes.
+    # `openrouter.query_models_parallel` was doing the gather.
+    
+    # Let's just use asyncio.gather for all. It's clean and effective.
+    
+    async def _query_safe(m: str):
+        try:
+            return m, await query_model(m, messages)
+        except Exception as e:
+            return m, {"error": True, "error_message": str(e)}
 
-    if provider == "ollama":
-        return await ollama_client.query_models_parallel(models, messages)
-    return await openrouter.query_models_parallel(models, messages)
+    tasks = [_query_safe(m) for m in models]
+    results = await asyncio.gather(*tasks)
+    
+    return dict(results)
 
 
-async def _query_ollama_batch(prefixed_models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
-    """Helper to query a batch of Ollama models and restore prefixes."""
-    raw_models = [m.removeprefix("ollama:") for m in prefixed_models]
-    results = await ollama_client.query_models_parallel(raw_models, messages)
-    # Remap back to prefixed keys
-    return {f"ollama:{model}": result for model, result in results.items()}
-
-
-async def stage1_collect_responses(user_query: str, search_context: str = "") -> List[Dict[str, Any]]:
+async def stage1_collect_responses(user_query: str, search_context: str = "", request: Any = None) -> Any:
     """
     Stage 1: Collect individual responses from all council models.
 
     Args:
         user_query: The user's question
         search_context: Optional web search results to provide context
+        request: FastAPI request object for checking disconnects
 
-    Returns:
-        List of dicts with 'model' and 'response' keys
+    Yields:
+        - First yield: total_models (int)
+        - Subsequent yields: Individual model results (dict)
     """
     if search_context:
         prompt = f"""You have access to the following real-time web search results.
@@ -99,47 +109,84 @@ Question: {user_query}"""
 
     messages = [{"role": "user", "content": prompt}]
 
-    # Query all models in parallel
-    responses = await query_models_parallel(get_council_models(), messages)
+    # Prepare tasks for all models
+    models = get_council_models()
+    
+    # Yield total count first
+    yield len(models)
 
-    # Format results - include both successful and failed responses
-    stage1_results = []
-    for model, response in responses.items():
-        if response is not None:
-            if response.get('error'):
-                # Include failed models with error info
-                stage1_results.append({
-                    "model": model,
-                    "response": None,
-                    "error": response.get('error'),
-                    "error_message": response.get('error_message', 'Unknown error')
-                })
-            else:
-                # Successful response
-                stage1_results.append({
-                    "model": model,
-                    "response": response.get('content', ''),
-                    "error": None
-                })
+    async def _query_safe(m: str):
+        try:
+            return m, await query_model(m, messages)
+        except Exception as e:
+            return m, {"error": True, "error_message": str(e)}
 
-    return stage1_results
+    # Create tasks
+    tasks = [asyncio.create_task(_query_safe(m)) for m in models]
+    
+    # Process as they complete
+    pending = set(tasks)
+    try:
+        while pending:
+            # Check for client disconnect
+            if request and await request.is_disconnected():
+                print("Client disconnected during Stage 1. Cancelling tasks...")
+                for t in pending:
+                    t.cancel()
+                raise asyncio.CancelledError("Client disconnected")
+
+            # Wait for the next task to complete (with timeout to check for disconnects)
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED, timeout=1.0)
+
+            for task in done:
+                try:
+                    model, response = await task
+                    
+                    result = None
+                    if response is not None:
+                        if response.get('error'):
+                            # Include failed models with error info
+                            result = {
+                                "model": model,
+                                "response": None,
+                                "error": response.get('error'),
+                                "error_message": response.get('error_message', 'Unknown error')
+                            }
+                        else:
+                            # Successful response
+                            result = {
+                                "model": model,
+                                "response": response.get('content', ''),
+                                "error": None
+                            }
+                    
+                    if result:
+                        yield result
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    print(f"Error processing Stage 1 task result: {e}")
+
+    except asyncio.CancelledError:
+        # Ensure all tasks are cancelled if we get cancelled
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        raise
 
 
 async def stage2_collect_rankings(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
-    search_context: str = ""
-) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
+    search_context: str = "",
+    request: Any = None
+) -> Any: # Returns an async generator
     """
-    Stage 2: Each model ranks the anonymized responses.
-
-    Args:
-        user_query: The original user query
-        stage1_results: Results from Stage 1
-        search_context: Optional web search results for fact-checking
-
-    Returns:
-        Tuple of (rankings list, label_to_model mapping)
+    Stage 2: Collect peer rankings from all council models.
+    
+    Yields:
+        - First yield: label_to_model mapping (dict)
+        - Subsequent yields: Individual model results (dict)
     """
     settings = get_settings()
 
@@ -154,6 +201,9 @@ async def stage2_collect_rankings(
         f"Response {label}": result['model']
         for label, result in zip(labels, successful_results)
     }
+    
+    # Yield the mapping first so the caller has it
+    yield label_to_model
 
     # Build the ranking prompt
     responses_text = "\n\n".join([
@@ -176,34 +226,72 @@ async def stage2_collect_rankings(
         ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses."
 
     messages = [{"role": "user", "content": ranking_prompt}]
+    
+    # Prepare tasks for all models
+    models = get_council_models()
+    
+    async def _query_safe(m: str):
+        try:
+            return m, await query_model(m, messages)
+        except Exception as e:
+            return m, {"error": True, "error_message": str(e)}
 
-    # Get rankings from all council models in parallel
-    responses = await query_models_parallel(get_council_models(), messages)
+    # Create tasks
+    tasks = [asyncio.create_task(_query_safe(m)) for m in models]
+    
+    # Process as they complete
+    # Process as they complete
+    pending = set(tasks)
+    try:
+        while pending:
+            # Check for client disconnect
+            if request and await request.is_disconnected():
+                print("Client disconnected during Stage 2. Cancelling tasks...")
+                for t in pending:
+                    t.cancel()
+                raise asyncio.CancelledError("Client disconnected")
 
-    # Format results - include both successful and failed responses
-    stage2_results = []
-    for model, response in responses.items():
-        if response is not None:
-            if response.get('error'):
-                # Include failed models with error info
-                stage2_results.append({
-                    "model": model,
-                    "ranking": None,
-                    "parsed_ranking": [],
-                    "error": response.get('error'),
-                    "error_message": response.get('error_message', 'Unknown error')
-                })
-            else:
-                full_text = response.get('content', '')
-                parsed = parse_ranking_from_text(full_text)
-                stage2_results.append({
-                    "model": model,
-                    "ranking": full_text,
-                    "parsed_ranking": parsed,
-                    "error": None
-                })
+            # Wait for the next task to complete (with timeout to check for disconnects)
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED, timeout=1.0)
 
-    return stage2_results, label_to_model
+            for task in done:
+                try:
+                    model, response = await task
+                    
+                    result = None
+                    if response is not None:
+                        if response.get('error'):
+                            # Include failed models with error info
+                            result = {
+                                "model": model,
+                                "ranking": None,
+                                "parsed_ranking": [],
+                                "error": response.get('error'),
+                                "error_message": response.get('error_message', 'Unknown error')
+                            }
+                        else:
+                            full_text = response.get('content', '')
+                            parsed = parse_ranking_from_text(full_text)
+                            result = {
+                                "model": model,
+                                "ranking": full_text,
+                                "parsed_ranking": parsed,
+                                "error": None
+                            }
+                    
+                    if result:
+                        yield result
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    print(f"Error processing task result: {e}")
+
+    except asyncio.CancelledError:
+        # Ensure all tasks are cancelled if we get cancelled
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        raise
 
 
 async def stage3_synthesize_final(
@@ -354,42 +442,26 @@ def calculate_aggregate_rankings(
 async def generate_conversation_title(user_query: str) -> str:
     """
     Generate a short title for a conversation based on the first user message.
+    
+    Uses a simple heuristic (first few words) to avoid unnecessary API calls.
 
     Args:
         user_query: The first user message
 
     Returns:
-        A short title (3-5 words)
+        A short title (max 50 chars)
     """
-    settings = get_settings()
-    try:
-        title_prompt = settings.title_prompt.format(user_query=user_query)
-    except KeyError:
-        title_prompt = f"Title for: {user_query}"
-
-    messages = [{"role": "user", "content": title_prompt}]
-
-    # Use configured title model
-    model_to_use = settings.title_model
-
-    response = await query_model(model_to_use, messages, timeout=30.0)
-
-    if response is None:
-        # Fallback to a generic title
-        return "New Conversation"
-
-    content = response.get('content')
-    if not content:
-        return "New Conversation"
-        
-    title = content.strip()
-
-    # Clean up the title - remove quotes, limit length
+    # Simple heuristic: take first 50 chars
+    title = user_query.strip()
+    
+    # Remove quotes if present
     title = title.strip('"\'')
-
+    
     # Truncate if too long
     if len(title) > 50:
         title = title[:47] + "..."
+        
+    return title
 
     return title
 

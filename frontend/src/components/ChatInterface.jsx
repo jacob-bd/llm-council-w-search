@@ -1,3 +1,5 @@
+import StageTimer from './StageTimer';
+// ... imports
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import SearchContext from './SearchContext';
@@ -44,7 +46,7 @@ export default function ChatInterface({
     return (
       <div className="chat-interface">
         <div className="empty-state">
-          <h2>Welcome to LLM Council</h2>
+          <h2>Welcome to LLM Council <span className="plus-text">Plus</span></h2>
           <p>Create a new conversation to get started</p>
         </div>
       </div>
@@ -96,17 +98,39 @@ export default function ChatInterface({
                   {msg.loading?.stage1 && (
                     <div className="stage-loading">
                       <div className="spinner"></div>
-                      <span>Running Stage 1: Collecting individual responses...</span>
+                      <span>
+                        Running Stage 1: Collecting individual responses...
+                        {msg.progress?.stage1?.total > 0 && (
+                          <span style={{ marginLeft: '8px', fontWeight: 'bold' }}>
+                            ({msg.progress.stage1.count}/{msg.progress.stage1.total})
+                          </span>
+                        )}
+                        <StageTimer startTime={msg.timers?.stage1Start} />
+                      </span>
                       <button className="abort-btn-inline" onClick={onAbort}>Stop</button>
                     </div>
                   )}
-                  {msg.stage1 && <Stage1 responses={msg.stage1} />}
+                  {msg.stage1 && (
+                    <Stage1
+                      responses={msg.stage1}
+                      startTime={msg.timers?.stage1Start}
+                      endTime={msg.timers?.stage1End}
+                    />
+                  )}
 
                   {/* Stage 2 */}
                   {msg.loading?.stage2 && (
                     <div className="stage-loading">
                       <div className="spinner"></div>
-                      <span>Running Stage 2: Peer rankings...</span>
+                      <span>
+                        Running Stage 2: Peer rankings...
+                        {msg.progress?.stage2?.total > 0 && (
+                          <span style={{ marginLeft: '8px', fontWeight: 'bold' }}>
+                            ({msg.progress.stage2.count}/{msg.progress.stage2.total})
+                          </span>
+                        )}
+                        <StageTimer startTime={msg.timers?.stage2Start} />
+                      </span>
                       <button className="abort-btn-inline" onClick={onAbort}>Stop</button>
                     </div>
                   )}
@@ -115,6 +139,8 @@ export default function ChatInterface({
                       rankings={msg.stage2}
                       labelToModel={msg.metadata?.label_to_model}
                       aggregateRankings={msg.metadata?.aggregate_rankings}
+                      startTime={msg.timers?.stage2Start}
+                      endTime={msg.timers?.stage2End}
                     />
                   )}
 
@@ -122,11 +148,20 @@ export default function ChatInterface({
                   {msg.loading?.stage3 && (
                     <div className="stage-loading">
                       <div className="spinner"></div>
-                      <span>Running Stage 3: Final synthesis...</span>
+                      <span>
+                        Running Stage 3: Final synthesis...
+                        <StageTimer startTime={msg.timers?.stage3Start} />
+                      </span>
                       <button className="abort-btn-inline" onClick={onAbort}>Stop</button>
                     </div>
                   )}
-                  {msg.stage3 && <Stage3 finalResponse={msg.stage3} />}
+                  {msg.stage3 && (
+                    <Stage3
+                      finalResponse={msg.stage3}
+                      startTime={msg.timers?.stage3Start}
+                      endTime={msg.timers?.stage3End}
+                    />
+                  )}
                 </div>
               )}
             </div>

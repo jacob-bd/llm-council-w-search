@@ -85,6 +85,39 @@
   gap: 12px;
 }
 
+/* System Prompts Styles (Restored) */
+.prompts-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  overflow-x: auto;
+}
+
+.prompt-tab {
+  background: none;
+  border: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.prompt-tab:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+.prompt-tab.active {
+  background-color: var(--primary-color);
+  color: white;
+  font-weight: 500;
+}
+
 .provider-option-container {
   border: 1px solid #d0d0d0;
   border-radius: 8px;
@@ -112,8 +145,27 @@
   background: #f8fafc;
 }
 
-.provider-option.selected {
-  /* Styles handled by .provider-option-container.selected */
+
+
+.provider-config-nested {
+  padding: 0 16px 16px 16px;
+  border-top: 1px solid #e0e0e0;
+  margin-top: 0;
+  background: #f5f9ff;
+  /* Match selected container background */
+}
+
+.provider-config-nested .api-key-section {
+  margin-top: 16px;
+  background: white;
+  border: 1px solid #d0d0d0;
+  padding: 12px;
+}
+
+.provider-config-nested .section-description {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #666;
 }
 
 .provider-option input[type="radio"] {
@@ -303,6 +355,11 @@
   font-size: 13px;
 }
 
+.ollama-auto-status.connected {
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+}
+
 .status-separator {
   color: #ccc;
   margin: 0 4px;
@@ -336,14 +393,73 @@
   padding: 16px 20px;
   border-top: 1px solid #e0e0e0;
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
+  position: relative;
+  /* For absolute positioning of messages */
 }
 
-.settings-actions {
+.reset-button {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #dc3545;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reset-button:hover {
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.action-btn {
+  padding: 4px 12px;
+  background: white;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: #f5f5f5;
+  border-color: #bbb;
+  color: #000;
+}
+
+.settings-success,
+.settings-error {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  animation: fadeIn 0.3s ease;
+}
+
+.settings-success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+.settings-error {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+.footer-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  gap: 12px;
 }
 
 .cancel-button {
@@ -443,8 +559,6 @@
   color: #666;
   cursor: pointer;
   transition: all 0.2s;
-  margin-right: auto;
-  /* Push to the left in footer */
 }
 
 .reset-defaults-button:hover {
@@ -703,73 +817,122 @@
   border: none;
 }
 
-.full-content-value {
-  min-width: 24px;
-  text-align: center;
+/* Hybrid Filter Card Layout */
+.hybrid-settings-card {
+  background: #f8f9fa;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.hybrid-section-header {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
-}
-
-/* Utility Models Styles */
-.model-selector-group {
-  margin-bottom: 16px;
-}
-
-.model-selector-group label {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 6px;
-}
-
-.model-selector-row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.model-select {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
-  font-size: 14px;
-  background: #ffffff;
-}
-
-/* System Prompts Styles */
-.prompts-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
-  overflow-x: auto;
-}
-
-.prompt-tab {
-  background: none;
-  border: none;
-  padding: 6px 12px;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  border-radius: 6px;
-  white-space: nowrap;
-  transition: all 0.2s;
-}
-
-.prompt-tab:hover {
-  background-color: rgba(0, 0, 0, 0.05);
   color: var(--text-primary);
+  margin-bottom: 16px;
+  display: block;
 }
 
-.prompt-tab.active {
+.filter-group {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 16px 0;
+  opacity: 0.6;
+}
+
+.direct-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  padding-left: 4px;
+}
+
+/* Toggle Switch Styles (Refined) */
+.toggle-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e0e0e0;
+  transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+input:checked+.slider {
   background-color: var(--primary-color);
-  color: white;
+}
+
+/* Custom color for Direct Connection sub-toggles */
+.direct-grid input:checked+.slider {
+  background-color: #7B61FF;
+  /* Distinct Purple */
+}
+
+input:checked+.slider:before {
+  transform: translateX(16px);
+}
+
+.toggle-text {
+  font-size: 14px;
   font-weight: 500;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+.member-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 120px;
+}
+
+.model-options-row {
+  margin-bottom: 20px;
 }
 
 .prompt-content {
@@ -779,9 +942,55 @@
 }
 
 .prompt-content label {
+  display: block;
   font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+/* Confirmation Modal Styles */
+.confirmation-overlay {
+  z-index: 1100;
+  /* Higher than settings overlay */
+  background: rgba(0, 0, 0, 0.7);
+  /* Darker backdrop */
+}
+
+.confirmation-modal {
+  max-width: 400px;
+  max-height: auto;
+  height: auto;
+}
+
+.confirmation-content {
+  padding: 20px;
+}
+
+.confirmation-details {
+  margin-top: 16px;
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.confirmation-details ul {
+  margin: 8px 0 16px 20px;
+  padding: 0;
+  font-size: 13px;
+  color: #555;
+}
+
+.confirmation-details li {
+  margin-bottom: 4px;
+}
+
+.confirmation-safe {
+  color: #2e7d32;
   font-weight: 600;
-  color: var(--text-primary);
+  font-size: 13px;
+  margin: 0;
 }
 
 .prompt-help {

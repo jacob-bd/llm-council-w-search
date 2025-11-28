@@ -19,7 +19,7 @@ DEFAULT_COUNCIL_MODELS = [
 ]
 DEFAULT_CHAIRMAN_MODEL = "google/gemini-2.5-pro"
 DEFAULT_SEARCH_QUERY_MODEL = "google/gemini-2.5-flash"
-DEFAULT_TITLE_MODEL = "google/gemini-2.5-flash"
+DEFAULT_SEARCH_QUERY_MODEL = "google/gemini-2.5-flash"
 
 
 # Available models for selection (popular OpenRouter models)
@@ -59,13 +59,13 @@ from .prompts import (
     STAGE1_PROMPT_DEFAULT,
     STAGE2_PROMPT_DEFAULT,
     STAGE3_PROMPT_DEFAULT,
-    TITLE_PROMPT_DEFAULT,
     SEARCH_QUERY_PROMPT_DEFAULT
 )
 
 class LLMProvider(str, Enum):
     OPENROUTER = "openrouter"
     OLLAMA = "ollama"
+    DIRECT = "direct"
     HYBRID = "hybrid"
 
 class Settings(BaseModel):
@@ -79,6 +79,11 @@ class Settings(BaseModel):
     tavily_api_key: Optional[str] = None
     brave_api_key: Optional[str] = None
     openrouter_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None
+    mistral_api_key: Optional[str] = None
+    deepseek_api_key: Optional[str] = None
     
     # OpenRouter Models
     council_models: List[str] = DEFAULT_COUNCIL_MODELS.copy()
@@ -89,13 +94,17 @@ class Settings(BaseModel):
     ollama_council_models: List[str] = []
     ollama_chairman_model: str = ""
 
+    # Direct Provider Settings
+    direct_council_models: List[str] = []
+    direct_chairman_model: str = ""
+
     # Hybrid Settings
     hybrid_council_models: List[str] = []
     hybrid_chairman_model: str = ""
     
     # Utility Models (for search query generation and titles)
     search_query_model: str = DEFAULT_SEARCH_QUERY_MODEL
-    title_model: str = DEFAULT_TITLE_MODEL
+    search_query_model: str = DEFAULT_SEARCH_QUERY_MODEL
     
     full_content_results: int = 3  # Number of search results to fetch full content for (0 to disable)
 
@@ -103,7 +112,7 @@ class Settings(BaseModel):
     stage1_prompt: str = STAGE1_PROMPT_DEFAULT
     stage2_prompt: str = STAGE2_PROMPT_DEFAULT
     stage3_prompt: str = STAGE3_PROMPT_DEFAULT
-    title_prompt: str = TITLE_PROMPT_DEFAULT
+
     search_query_prompt: str = SEARCH_QUERY_PROMPT_DEFAULT
 
     class Config:

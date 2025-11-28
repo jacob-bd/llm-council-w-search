@@ -1,6 +1,6 @@
 """FastAPI backend for LLM Council."""
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -11,11 +11,11 @@ import json
 import asyncio
 
 from . import storage
-from .council import run_full_council, generate_conversation_title, generate_search_query, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings
+from .council import run_full_council, generate_conversation_title, generate_search_query, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, PROVIDERS
 from .search import perform_web_search, SearchProvider
 from .settings import get_settings, update_settings, Settings, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL
 
-app = FastAPI(title="LLM Council API")
+app = FastAPI(title="LLM Council Plus API")
 
 # Enable CORS for local development
 app.add_middleware(
@@ -139,7 +139,7 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
 
 
 @app.post("/api/conversations/{conversation_id}/message/stream")
-async def send_message_stream(conversation_id: str, request: SendMessageRequest):
+async def send_message_stream(conversation_id: str, body: SendMessageRequest, request: Request):
     """
     Send a message and stream the 3-stage council process.
     Returns Server-Sent Events as each stage completes.
@@ -154,18 +154,25 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
     async def event_generator():
         try:
+            # Initialize variables for metadata
+            stage1_results = []
+            stage2_results = []
+            stage3_result = None
+            label_to_model = {}
+            aggregate_rankings = {}
+            
             # Add user message
-            storage.add_user_message(conversation_id, request.content)
+            storage.add_user_message(conversation_id, body.content)
 
             # Start title generation in parallel (don't await yet)
             title_task = None
             if is_first_message:
-                title_task = asyncio.create_task(generate_conversation_title(request.content))
+                title_task = asyncio.create_task(generate_conversation_title(body.content))
 
             # Perform web search if requested
             search_context = ""
             search_query = ""
-            if request.web_search:
+            if body.web_search:
                 settings = get_settings()
                 provider = SearchProvider(settings.search_provider)
 
@@ -177,7 +184,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
                 yield f"data: {json.dumps({'type': 'search_start', 'data': {'provider': provider.value}})}\n\n"
                 # Generate optimized search query
-                search_query = await generate_search_query(request.content)
+                search_query = await generate_search_query(body.content)
                 # Run search in thread to avoid blocking
                 search_context = await asyncio.to_thread(perform_web_search, search_query, 5, provider, settings.full_content_results)
                 yield f"data: {json.dumps({'type': 'search_complete', 'data': {'search_query': search_query, 'search_context': search_context, 'provider': provider.value}})}\n\n"
@@ -186,7 +193,20 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             # Stage 1: Collect responses
             yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
             await asyncio.sleep(0.05)
-            stage1_results = await stage1_collect_responses(request.content, search_context)
+            
+            total_models = 0
+            
+            async for item in stage1_collect_responses(body.content, search_context, request):
+                if isinstance(item, int):
+                    total_models = item
+                    print(f"DEBUG: Sending stage1_init with total={total_models}")
+                    yield f"data: {json.dumps({'type': 'stage1_init', 'total': total_models})}\n\n"
+                    continue
+                
+                stage1_results.append(item)
+                yield f"data: {json.dumps({'type': 'stage1_progress', 'data': item, 'count': len(stage1_results), 'total': total_models})}\n\n"
+                await asyncio.sleep(0.01)
+
             yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results})}\n\n"
             await asyncio.sleep(0.05)
 
@@ -200,7 +220,24 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             # Stage 2: Collect rankings
             yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
             await asyncio.sleep(0.05)
-            stage2_results, label_to_model = await stage2_collect_rankings(request.content, stage1_results, search_context)
+            
+            # Iterate over the async generator
+            async for item in stage2_collect_rankings(body.content, stage1_results, search_context, request):
+                # First item is the label mapping
+                if isinstance(item, dict) and not item.get('model'):
+                    label_to_model = item
+                    # Send init event with total count
+                    yield f"data: {json.dumps({'type': 'stage2_init', 'total': len(label_to_model)})}\n\n"
+                    continue
+                
+                # Subsequent items are results
+                stage2_results.append(item)
+                
+                # Send progress update
+                print(f"Stage 2 Progress: {len(stage2_results)}/{len(label_to_model)} - {item['model']}")
+                yield f"data: {json.dumps({'type': 'stage2_progress', 'data': item, 'count': len(stage2_results), 'total': len(label_to_model)})}\n\n"
+                await asyncio.sleep(0.01)
+
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
             yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'search_query': search_query, 'search_context': search_context}})}\n\n"
             await asyncio.sleep(0.05)
@@ -208,19 +245,39 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             # Stage 3: Synthesize final answer
             yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
             await asyncio.sleep(0.05)
-            stage3_result = await stage3_synthesize_final(request.content, stage1_results, stage2_results, search_context)
+            stage3_result = await stage3_synthesize_final(body.content, stage1_results, stage2_results, search_context)
             yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
 
             # Wait for title generation if it was started
             if title_task:
-                title = await title_task
-                storage.update_conversation_title(conversation_id, title)
-                yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
+                try:
+                    title = await title_task
+                    storage.update_conversation_title(conversation_id, title)
+                    yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
+                except Exception as e:
+                    print(f"Error waiting for title task: {e}")
+
+        except asyncio.CancelledError:
+            print(f"Stream cancelled for conversation {conversation_id}")
+            # Even if cancelled, try to save the title if it's ready or nearly ready
+            if title_task:
+                try:
+                    # Give it a small grace period to finish if it's close
+                    title = await asyncio.wait_for(title_task, timeout=2.0)
+                    storage.update_conversation_title(conversation_id, title)
+                    print(f"Saved title despite cancellation: {title}")
+                except Exception as e:
+                    print(f"Could not save title during cancellation: {e}")
+            raise
+        except Exception as e:
+            print(f"Stream error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
             # Save complete assistant message with metadata
             metadata = {
                 "label_to_model": label_to_model,
                 "aggregate_rankings": aggregate_rankings,
+                "search_context": search_context,
             }
             if search_query:
                 metadata["search_query"] = search_query
@@ -278,6 +335,16 @@ class UpdateSettingsRequest(BaseModel):
     stage3_prompt: Optional[str] = None
     title_prompt: Optional[str] = None
     search_query_prompt: Optional[str] = None
+    
+    # Direct Provider Keys
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None
+    mistral_api_key: Optional[str] = None
+    deepseek_api_key: Optional[str] = None
+    
+    direct_council_models: Optional[List[str]] = None
+    direct_chairman_model: Optional[str] = None
 
 
 
@@ -306,13 +373,22 @@ async def get_app_settings():
         "chairman_model": settings.chairman_model,
         # Utility Models
         "search_query_model": settings.search_query_model,
-        "title_model": settings.title_model,
         # Prompts
         "stage1_prompt": settings.stage1_prompt,
         "stage2_prompt": settings.stage2_prompt,
         "stage3_prompt": settings.stage3_prompt,
-        "title_prompt": settings.title_prompt,
         "search_query_prompt": settings.search_query_prompt,
+        "search_query_prompt": settings.search_query_prompt,
+        
+        # Direct Provider Keys Set Status
+        "openai_api_key_set": bool(settings.openai_api_key),
+        "anthropic_api_key_set": bool(settings.anthropic_api_key),
+        "google_api_key_set": bool(settings.google_api_key),
+        "mistral_api_key_set": bool(settings.mistral_api_key),
+        "deepseek_api_key_set": bool(settings.deepseek_api_key),
+        
+        "direct_council_models": settings.direct_council_models,
+        "direct_chairman_model": settings.direct_chairman_model,
     }
 
 
@@ -327,12 +403,11 @@ async def get_default_settings():
         TITLE_PROMPT_DEFAULT,
         SEARCH_QUERY_PROMPT_DEFAULT
     )
-    from .settings import DEFAULT_SEARCH_QUERY_MODEL, DEFAULT_TITLE_MODEL
+    from .settings import DEFAULT_SEARCH_QUERY_MODEL
     return {
         "council_models": DEFAULT_COUNCIL_MODELS,
         "chairman_model": DEFAULT_CHAIRMAN_MODEL,
         "search_query_model": DEFAULT_SEARCH_QUERY_MODEL,
-        "title_model": DEFAULT_TITLE_MODEL,
         "stage1_prompt": STAGE1_PROMPT_DEFAULT,
         "stage2_prompt": STAGE2_PROMPT_DEFAULT,
         "stage3_prompt": STAGE3_PROMPT_DEFAULT,
@@ -429,6 +504,23 @@ async def update_app_settings(request: UpdateSettingsRequest):
 
     if request.openrouter_api_key is not None:
         updates["openrouter_api_key"] = request.openrouter_api_key
+        
+    # Direct Provider Keys
+    if request.openai_api_key is not None:
+        updates["openai_api_key"] = request.openai_api_key
+    if request.anthropic_api_key is not None:
+        updates["anthropic_api_key"] = request.anthropic_api_key
+    if request.google_api_key is not None:
+        updates["google_api_key"] = request.google_api_key
+    if request.mistral_api_key is not None:
+        updates["mistral_api_key"] = request.mistral_api_key
+    if request.deepseek_api_key is not None:
+        updates["deepseek_api_key"] = request.deepseek_api_key
+        
+    if request.direct_council_models is not None:
+        updates["direct_council_models"] = request.direct_council_models
+    if request.direct_chairman_model is not None:
+        updates["direct_chairman_model"] = request.direct_chairman_model
 
     if request.council_models is not None:
         # Validate that at least two models are selected
@@ -467,9 +559,35 @@ async def update_app_settings(request: UpdateSettingsRequest):
         "tavily_api_key_set": bool(settings.tavily_api_key),
         "brave_api_key_set": bool(settings.brave_api_key),
         "openrouter_api_key_set": bool(settings.openrouter_api_key),
+        "openai_api_key_set": bool(settings.openai_api_key),
+        "anthropic_api_key_set": bool(settings.anthropic_api_key),
+        "google_api_key_set": bool(settings.google_api_key),
+        "mistral_api_key_set": bool(settings.mistral_api_key),
+        "deepseek_api_key_set": bool(settings.deepseek_api_key),
         "council_models": settings.council_models,
         "chairman_model": settings.chairman_model,
     }
+
+
+@app.get("/api/models/direct")
+async def get_direct_models():
+    """Get available models from all configured direct providers."""
+    all_models = []
+    
+    # Iterate over all providers
+    for provider_id, provider in PROVIDERS.items():
+        # Skip OpenRouter and Ollama as they are handled separately
+        if provider_id in ["openrouter", "ollama", "hybrid"]:
+            continue
+            
+        try:
+            # Fetch models from provider
+            models = await provider.get_models()
+            all_models.extend(models)
+        except Exception as e:
+            print(f"Error fetching models for {provider_id}: {e}")
+            
+    return all_models
 
 
 @app.post("/api/settings/test-tavily")
@@ -539,6 +657,24 @@ async def test_brave_api(request: TestBraveRequest):
 class TestOpenRouterRequest(BaseModel):
     """Request to test OpenRouter API key."""
     api_key: Optional[str] = None
+
+
+class TestProviderRequest(BaseModel):
+    """Request to test a specific provider's API key."""
+    provider_id: str
+    api_key: str
+
+
+@app.post("/api/settings/test-provider")
+async def test_provider_api(request: TestProviderRequest):
+    """Test an API key for a specific provider."""
+    from .council import PROVIDERS
+    
+    if request.provider_id not in PROVIDERS:
+        raise HTTPException(status_code=400, detail="Invalid provider ID")
+        
+    provider = PROVIDERS[request.provider_id]
+    return await provider.validate_key(request.api_key)
 
 
 class TestOllamaRequest(BaseModel):

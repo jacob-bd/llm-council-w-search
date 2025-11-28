@@ -103,20 +103,21 @@
 }
 
 .abort-btn-inline {
-  margin-left: auto; /* Push to right */
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--error-color);
-  padding: 4px 12px;
-  border-radius: 4px;
+  margin-left: auto;
+  padding: 6px 14px;
+  background: #fff;
+  border: 1px solid #d32f2f;
+  border-radius: 6px;
+  color: #d32f2f;
+  font-size: 13px;
   cursor: pointer;
-  font-size: 0.85rem;
   transition: all 0.2s;
 }
 
 .abort-btn-inline:hover {
-  background-color: rgba(255, 69, 58, 0.1);
-  border-color: var(--error-color);
+  background: #ffebee;
+  border-color: #c62828;
+  color: #c62828;
 }
 
 

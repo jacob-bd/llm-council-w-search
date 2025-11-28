@@ -143,6 +143,23 @@ export const api = {
   },
 
   /**
+   * Test a specific provider's API key.
+   */
+  async testProviderKey(providerId, apiKey) {
+    const response = await fetch(`${API_BASE}/api/settings/test-provider`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ provider_id: providerId, api_key: apiKey }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to test API key');
+    }
+    return response.json();
+  },
+
+  /**
    * Test Ollama connection.
    */
   async testOllamaConnection(baseUrl) {
@@ -181,6 +198,17 @@ export const api = {
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error('Failed to get Ollama models');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get available models from direct providers.
+   */
+  async getDirectModels() {
+    const response = await fetch(`${API_BASE}/api/models/direct`);
+    if (!response.ok) {
+      throw new Error('Failed to get direct models');
     }
     return response.json();
   },

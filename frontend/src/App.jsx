@@ -149,6 +149,18 @@ function App() {
           stage2: false,
           stage3: false,
         },
+        timers: {
+          stage1Start: null,
+          stage1End: null,
+          stage2Start: null,
+          stage2End: null,
+          stage3Start: null,
+          stage3End: null,
+        },
+        progress: {
+          stage1: { count: 0, total: 0, currentModel: null },
+          stage2: { count: 0, total: 0, currentModel: null }
+        }
       };
 
       // Add the partial assistant message
@@ -189,6 +201,47 @@ function App() {
               const messages = [...prev.messages];
               const lastMsg = messages[messages.length - 1];
               lastMsg.loading.stage1 = true;
+              lastMsg.timers.stage1Start = Date.now();
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'stage1_init':
+            console.log('DEBUG: Received stage1_init', event);
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.progress.stage1 = {
+                count: 0,
+                total: event.total,
+                currentModel: null
+              };
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'stage1_progress':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+
+              // Immutable update for stage1
+              const updatedStage1 = lastMsg.stage1 ? [...lastMsg.stage1, event.data] : [event.data];
+              const updatedLastMsg = {
+                ...lastMsg,
+                progress: {
+                  ...lastMsg.progress,
+                  stage1: {
+                    count: event.count,
+                    total: event.total,
+                    currentModel: event.data.model
+                  }
+                },
+                stage1: updatedStage1
+              };
+
+              messages[messages.length - 1] = updatedLastMsg;
+
               return { ...prev, messages };
             });
             break;
@@ -199,6 +252,7 @@ function App() {
               const lastMsg = messages[messages.length - 1];
               lastMsg.stage1 = event.data;
               lastMsg.loading.stage1 = false;
+              lastMsg.timers.stage1End = Date.now();
               return { ...prev, messages };
             });
             break;
@@ -208,6 +262,46 @@ function App() {
               const messages = [...prev.messages];
               const lastMsg = messages[messages.length - 1];
               lastMsg.loading.stage2 = true;
+              lastMsg.timers.stage2Start = Date.now();
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'stage2_init':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.progress.stage2 = {
+                count: 0,
+                total: event.total,
+                currentModel: null
+              };
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'stage2_progress':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+
+              // Immutable update for stage2
+              const updatedStage2 = lastMsg.stage2 ? [...lastMsg.stage2, event.data] : [event.data];
+              const updatedLastMsg = {
+                ...lastMsg,
+                progress: {
+                  ...lastMsg.progress,
+                  stage2: {
+                    count: event.count,
+                    total: event.total,
+                    currentModel: event.data.model
+                  }
+                },
+                stage2: updatedStage2
+              };
+
+              messages[messages.length - 1] = updatedLastMsg;
+
               return { ...prev, messages };
             });
             break;
@@ -216,9 +310,14 @@ function App() {
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
               const lastMsg = messages[messages.length - 1];
+              // Ensure we have the full final list (though we might have built it incrementally)
               lastMsg.stage2 = event.data;
-              lastMsg.metadata = event.metadata;
               lastMsg.loading.stage2 = false;
+              lastMsg.timers.stage2End = Date.now();
+              lastMsg.metadata = {
+                ...lastMsg.metadata,
+                ...event.metadata
+              };
               return { ...prev, messages };
             });
             break;
@@ -228,6 +327,7 @@ function App() {
               const messages = [...prev.messages];
               const lastMsg = messages[messages.length - 1];
               lastMsg.loading.stage3 = true;
+              lastMsg.timers.stage3Start = Date.now();
               return { ...prev, messages };
             });
             break;
@@ -238,6 +338,7 @@ function App() {
               const lastMsg = messages[messages.length - 1];
               lastMsg.stage3 = event.data;
               lastMsg.loading.stage3 = false;
+              lastMsg.timers.stage3End = Date.now();
               return { ...prev, messages };
             });
             break;
@@ -277,6 +378,8 @@ function App() {
       setIsLoading(false);
     } finally {
       abortControllerRef.current = null;
+      // Reload conversations to ensure title/messages are synced, even if aborted
+      loadConversations();
     }
   };
 
