@@ -112,7 +112,6 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
 
   // Utility Models State
   const [searchQueryModel, setSearchQueryModel] = useState('');
-  const [titleModel, setTitleModel] = useState('');
 
   // System Prompts State
   const [prompts, setPrompts] = useState({
@@ -145,22 +144,19 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
       if (selectedLlmProvider !== settings.llm_provider) return true;
 
       // OpenRouter
-      if (openrouterApiKey && openrouterApiKey !== settings.openrouter_api_key) return true; // Note: This compares with empty string if not set, which is fine
+      // Note: openrouterApiKey is auto-saved on test, so we don't check it here
       if (JSON.stringify(councilModels) !== JSON.stringify(settings.council_models)) return true;
       if (chairmanModel !== settings.chairman_model) return true;
 
       // Ollama
-      if (ollamaBaseUrl !== settings.ollama_base_url) return true;
+      // Note: ollamaBaseUrl is auto-saved on connect, so we don't check it here
       if (JSON.stringify(ollamaCouncilModels) !== JSON.stringify(settings.ollama_council_models)) return true;
       if (ollamaChairmanModel !== settings.ollama_chairman_model) return true;
 
       // Direct
       if (JSON.stringify(directCouncilModels) !== JSON.stringify(settings.direct_council_models)) return true;
       if (directChairmanModel !== settings.direct_chairman_model) return true;
-      // Check direct keys
-      for (const [key, value] of Object.entries(directKeys)) {
-        if (value && value !== settings[key]) return true;
-      }
+      // Note: directKeys are auto-saved on test, so we don't check them here
 
       // Hybrid
       if (JSON.stringify(hybridCouncilModels) !== JSON.stringify(settings.hybrid_council_models)) return true;
@@ -168,7 +164,6 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
 
       // Utility
       if (searchQueryModel !== settings.search_query_model) return true;
-      if (titleModel !== settings.title_model) return true;
 
       // Prompts
       if (prompts.stage1_prompt !== settings.stage1_prompt) return true;
@@ -177,9 +172,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
       if (prompts.title_prompt !== settings.title_prompt) return true;
       if (prompts.search_query_prompt !== settings.search_query_prompt) return true;
 
-      // API Keys (Search)
-      if (tavilyApiKey) return true;
-      if (braveApiKey) return true;
+      // Note: API keys (tavilyApiKey, braveApiKey) are auto-saved on test, so we don't check them here
 
       return false;
     };
@@ -190,22 +183,16 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
     selectedSearchProvider,
     fullContentResults,
     selectedLlmProvider,
-    openrouterApiKey,
     councilModels,
     chairmanModel,
-    ollamaBaseUrl,
     ollamaCouncilModels,
     ollamaChairmanModel,
     directCouncilModels,
     directChairmanModel,
-    directKeys,
     hybridCouncilModels,
     hybridChairmanModel,
     searchQueryModel,
-    titleModel,
-    prompts,
-    tavilyApiKey,
-    braveApiKey
+    prompts
   ]);
 
   const loadSettings = async () => {
@@ -229,7 +216,6 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
       setHybridChairmanModel(data.hybrid_chairman_model || '');
 
       setSearchQueryModel(data.search_query_model || 'google/gemini-2.5-flash');
-      setTitleModel(data.title_model || 'google/gemini-2.5-flash');
 
       setPrompts({
         stage1_prompt: data.stage1_prompt || '',
@@ -341,11 +327,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
       if (searchQueryModel.startsWith('ollama:')) {
         setSearchQueryModel('');
       }
-      if (titleModel.startsWith('ollama:')) {
-        setTitleModel('');
-      }
     }
-  }, [selectedLlmProvider, searchQueryModel, titleModel]);
+  }, [selectedLlmProvider, searchQueryModel]);
 
   const handleTestTavily = async () => {
     if (!tavilyApiKey) {
@@ -357,6 +340,20 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
     try {
       const result = await api.testTavilyKey(tavilyApiKey);
       setTavilyTestResult(result);
+
+      // Auto-save API key if validation succeeds
+      if (result.success) {
+        await api.updateSettings({ tavily_api_key: tavilyApiKey });
+        setTavilyApiKey(''); // Clear input after save
+
+        // Reload settings but preserve current UI selections
+        const currentProvider = selectedLlmProvider;
+        await loadSettings();
+        setSelectedLlmProvider(currentProvider);
+
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      }
     } catch (err) {
       setTavilyTestResult({ success: false, message: 'Test failed' });
     } finally {
@@ -374,6 +371,20 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
     try {
       const result = await api.testBraveKey(braveApiKey);
       setBraveTestResult(result);
+
+      // Auto-save API key if validation succeeds
+      if (result.success) {
+        await api.updateSettings({ brave_api_key: braveApiKey });
+        setBraveApiKey(''); // Clear input after save
+
+        // Reload settings but preserve current UI selections
+        const currentProvider = selectedLlmProvider;
+        await loadSettings();
+        setSelectedLlmProvider(currentProvider);
+
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      }
     } catch (err) {
       setBraveTestResult({ success: false, message: 'Test failed' });
     } finally {
@@ -393,6 +404,20 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
       const keyToTest = openrouterApiKey || null;
       const result = await api.testOpenRouterKey(keyToTest);
       setOpenrouterTestResult(result);
+
+      // Auto-save API key if validation succeeds and a new key was provided
+      if (result.success && openrouterApiKey) {
+        await api.updateSettings({ openrouter_api_key: openrouterApiKey });
+        setOpenrouterApiKey(''); // Clear input after save
+
+        // Reload settings but preserve current UI selections
+        const currentProvider = selectedLlmProvider;
+        await loadSettings();
+        setSelectedLlmProvider(currentProvider);
+
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      }
     } catch (err) {
       setOpenrouterTestResult({ success: false, message: 'Test failed' });
     } finally {
@@ -406,14 +431,31 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
     try {
       const result = await api.testOllamaConnection(ollamaBaseUrl);
       setOllamaTestResult(result);
+
+      // Always refresh parent component's ollama status (success or failure)
+      if (onRefreshOllama) {
+        onRefreshOllama(ollamaBaseUrl);
+      }
+
       if (result.success) {
-        // Refresh models if connection succeeds
-        // We trigger this via a dummy backend update or just assume previous load worked
-        // Actually, we should call the model fetch endpoint again but it relies on saved settings usually
-        // Let's just rely on the test result for now
+        // Auto-save base URL if connection succeeds
+        await api.updateSettings({ ollama_base_url: ollamaBaseUrl });
+
+        // Reload settings but preserve current UI selections
+        const currentProvider = selectedLlmProvider;
+        await loadSettings();
+        setSelectedLlmProvider(currentProvider);
+
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
       }
     } catch (err) {
       setOllamaTestResult({ success: false, message: 'Connection failed' });
+
+      // Refresh parent status on exception too
+      if (onRefreshOllama) {
+        onRefreshOllama(ollamaBaseUrl);
+      }
     } finally {
       setIsTestingOllama(false);
     }
@@ -587,6 +629,20 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
           message: result.message
         }
       }));
+
+      // Auto-save API key if validation succeeds
+      if (result.success) {
+        await api.updateSettings({ [keyField]: apiKey });
+        setDirectKeys(prev => ({ ...prev, [keyField]: '' })); // Clear input after save
+
+        // Reload settings but preserve current UI selections
+        const currentProvider = selectedLlmProvider;
+        await loadSettings();
+        setSelectedLlmProvider(currentProvider);
+
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      }
     } catch (err) {
       setKeyValidationStatus(prev => ({
         ...prev,
@@ -765,7 +821,6 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
 
         // Utility Models
         search_query_model: searchQueryModel,
-        title_model: titleModel,
 
         // Prompts
         ...prompts
@@ -1246,7 +1301,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
           <section className="settings-section">
             <h3>Utility Models</h3>
             <p className="section-description">
-              Select models for specific tasks like generating search queries and conversation titles.
+              Select models for generating optimized search queries from user questions.
             </p>
 
             {/* Search Query Model */}

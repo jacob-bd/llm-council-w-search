@@ -25,3 +25,4 @@ frontend/dist/
 frontend/.vite/
 
 .DS_Store
+BUGS_AND_OPTIMIZATIONS.md

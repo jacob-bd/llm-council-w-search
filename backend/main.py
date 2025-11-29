@@ -11,7 +11,7 @@ import json
 import asyncio
 
 from . import storage
-from .council import run_full_council, generate_conversation_title, generate_search_query, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, PROVIDERS
+from .council import generate_conversation_title, generate_search_query, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, PROVIDERS
 from .search import perform_web_search, SearchProvider
 from .settings import get_settings, update_settings, Settings, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL
 
@@ -92,52 +92,6 @@ async def delete_conversation(conversation_id: str):
     return {"status": "deleted"}
 
 
-@app.post("/api/conversations/{conversation_id}/message")
-async def send_message(conversation_id: str, request: SendMessageRequest):
-    """
-    Send a message and run the 3-stage council process.
-    Returns the complete response with all stages.
-    """
-    # Check if conversation exists
-    conversation = storage.get_conversation(conversation_id)
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    # Check if this is the first message
-    is_first_message = len(conversation["messages"]) == 0
-
-    # Add user message
-    storage.add_user_message(conversation_id, request.content)
-
-    # If this is the first message, generate a title
-    if is_first_message:
-        title = await generate_conversation_title(request.content)
-        storage.update_conversation_title(conversation_id, title)
-
-    # Run the 3-stage council process
-    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
-        request.content,
-        request.web_search
-    )
-
-    # Add assistant message with all stages and metadata
-    storage.add_assistant_message(
-        conversation_id,
-        stage1_results,
-        stage2_results,
-        stage3_result,
-        metadata
-    )
-
-    # Return the complete response with metadata
-    return {
-        "stage1": stage1_results,
-        "stage2": stage2_results,
-        "stage3": stage3_result,
-        "metadata": metadata
-    }
-
-
 @app.post("/api/conversations/{conversation_id}/message/stream")
 async def send_message_stream(conversation_id: str, body: SendMessageRequest, request: Request):
     """
@@ -173,6 +127,11 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
             search_context = ""
             search_query = ""
             if body.web_search:
+                # Check for disconnect before starting search
+                if await request.is_disconnected():
+                    print("Client disconnected before web search")
+                    raise asyncio.CancelledError("Client disconnected")
+
                 settings = get_settings()
                 provider = SearchProvider(settings.search_provider)
 
@@ -183,10 +142,22 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     os.environ["BRAVE_API_KEY"] = settings.brave_api_key
 
                 yield f"data: {json.dumps({'type': 'search_start', 'data': {'provider': provider.value}})}\n\n"
+
+                # Check for disconnect before generating search query
+                if await request.is_disconnected():
+                    print("Client disconnected during search setup")
+                    raise asyncio.CancelledError("Client disconnected")
+
                 # Generate optimized search query
                 search_query = await generate_search_query(body.content)
-                # Run search in thread to avoid blocking
-                search_context = await asyncio.to_thread(perform_web_search, search_query, 5, provider, settings.full_content_results)
+
+                # Check for disconnect before performing search
+                if await request.is_disconnected():
+                    print("Client disconnected before search execution")
+                    raise asyncio.CancelledError("Client disconnected")
+
+                # Run search (now fully async for Tavily/Brave, threaded only for DuckDuckGo)
+                search_context = await perform_web_search(search_query, 5, provider, settings.full_content_results)
                 yield f"data: {json.dumps({'type': 'search_complete', 'data': {'search_query': search_query, 'search_context': search_context, 'provider': provider.value}})}\n\n"
                 await asyncio.sleep(0.05)
 
@@ -245,6 +216,12 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
             # Stage 3: Synthesize final answer
             yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
             await asyncio.sleep(0.05)
+
+            # Check for disconnect before starting Stage 3
+            if await request.is_disconnected():
+                print("Client disconnected before Stage 3")
+                raise asyncio.CancelledError("Client disconnected")
+
             stage3_result = await stage3_synthesize_final(body.content, stage1_results, stage2_results, search_context)
             yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
 
@@ -256,22 +233,6 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
                 except Exception as e:
                     print(f"Error waiting for title task: {e}")
-
-        except asyncio.CancelledError:
-            print(f"Stream cancelled for conversation {conversation_id}")
-            # Even if cancelled, try to save the title if it's ready or nearly ready
-            if title_task:
-                try:
-                    # Give it a small grace period to finish if it's close
-                    title = await asyncio.wait_for(title_task, timeout=2.0)
-                    storage.update_conversation_title(conversation_id, title)
-                    print(f"Saved title despite cancellation: {title}")
-                except Exception as e:
-                    print(f"Could not save title during cancellation: {e}")
-            raise
-        except Exception as e:
-            print(f"Stream error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
             # Save complete assistant message with metadata
             metadata = {
@@ -293,7 +254,20 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
             # Send completion event
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
+        except asyncio.CancelledError:
+            print(f"Stream cancelled for conversation {conversation_id}")
+            # Even if cancelled, try to save the title if it's ready or nearly ready
+            if title_task:
+                try:
+                    # Give it a small grace period to finish if it's close
+                    title = await asyncio.wait_for(title_task, timeout=2.0)
+                    storage.update_conversation_title(conversation_id, title)
+                    print(f"Saved title despite cancellation: {title}")
+                except Exception as e:
+                    print(f"Could not save title during cancellation: {e}")
+            raise
         except Exception as e:
+            print(f"Stream error: {e}")
             # Save error to conversation history
             storage.add_error_message(conversation_id, f"Error: {str(e)}")
             # Send error event

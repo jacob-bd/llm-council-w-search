@@ -17,6 +17,7 @@ function App() {
     testing: false
   });
   const abortControllerRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   // Auto-test Ollama connection on mount
   useEffect(() => {
@@ -28,18 +29,23 @@ function App() {
     loadConversations();
   }, []);
 
-  const testOllamaConnection = async () => {
+  const testOllamaConnection = async (customUrl = null) => {
     try {
       setOllamaStatus(prev => ({ ...prev, testing: true }));
-      // Get current settings to grab Ollama base URL
-      const settings = await api.getSettings();
 
-      if (!settings.ollama_base_url) {
+      // Use custom URL if provided, otherwise get from settings
+      let urlToTest = customUrl;
+      if (!urlToTest) {
+        const settings = await api.getSettings();
+        urlToTest = settings.ollama_base_url;
+      }
+
+      if (!urlToTest) {
         setOllamaStatus({ connected: false, lastConnected: null, testing: false });
         return;
       }
 
-      const result = await api.testOllamaConnection(settings.ollama_base_url);
+      const result = await api.testOllamaConnection(urlToTest);
 
       if (result.success) {
         setOllamaStatus({
@@ -116,13 +122,17 @@ function App() {
   const handleAbort = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+      // Don't set to null here - let the request handler clean up
+      // This prevents race conditions with rapid clicks
       setIsLoading(false);
     }
   };
 
   const handleSendMessage = async (content, webSearch) => {
     if (!currentConversationId) return;
+
+    // Assign unique ID to this request to prevent race conditions
+    const currentRequestId = ++requestIdRef.current;
 
     // Create new AbortController for this request
     abortControllerRef.current = new AbortController();
@@ -341,6 +351,8 @@ function App() {
               lastMsg.timers.stage3End = Date.now();
               return { ...prev, messages };
             });
+            // Hide loading indicator once final answer is shown
+            setIsLoading(false);
             break;
 
           case 'title_complete':
@@ -377,7 +389,11 @@ function App() {
       }));
       setIsLoading(false);
     } finally {
-      abortControllerRef.current = null;
+      // Only clear the controller if this is still the current request
+      // This prevents race conditions if user rapidly sends multiple messages
+      if (requestIdRef.current === currentRequestId) {
+        abortControllerRef.current = null;
+      }
       // Reload conversations to ensure title/messages are synced, even if aborted
       loadConversations();
     }

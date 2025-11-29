@@ -2,11 +2,14 @@
 
 from typing import List, Dict, Any, Tuple
 import asyncio
+import logging
 from . import openrouter
 from . import ollama_client
 from .config import get_council_models, get_chairman_model, get_llm_provider
 from .search import perform_web_search, SearchProvider
 from .settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 from .providers.openai import OpenAIProvider
@@ -130,7 +133,7 @@ Question: {user_query}"""
         while pending:
             # Check for client disconnect
             if request and await request.is_disconnected():
-                print("Client disconnected during Stage 1. Cancelling tasks...")
+                logger.info("Client disconnected during Stage 1. Cancelling tasks...")
                 for t in pending:
                     t.cancel()
                 raise asyncio.CancelledError("Client disconnected")
@@ -165,7 +168,7 @@ Question: {user_query}"""
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    print(f"Error processing Stage 1 task result: {e}")
+                    logger.error(f"Error processing Stage 1 task result: {e}")
 
     except asyncio.CancelledError:
         # Ensure all tasks are cancelled if we get cancelled
@@ -222,14 +225,15 @@ async def stage2_collect_rankings(
             search_context_block=search_context_block
         )
     except KeyError as e:
-        print(f"Error formatting Stage 2 prompt: {e}. Using fallback.")
+        logger.warning(f"Error formatting Stage 2 prompt: {e}. Using fallback.")
         ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses."
 
     messages = [{"role": "user", "content": ranking_prompt}]
-    
-    # Prepare tasks for all models
-    models = get_council_models()
-    
+
+    # Only use models that successfully responded in Stage 1
+    # (no point asking failed models to rank - they'll just fail again)
+    successful_models = [r['model'] for r in successful_results]
+
     async def _query_safe(m: str):
         try:
             return m, await query_model(m, messages)
@@ -237,16 +241,15 @@ async def stage2_collect_rankings(
             return m, {"error": True, "error_message": str(e)}
 
     # Create tasks
-    tasks = [asyncio.create_task(_query_safe(m)) for m in models]
-    
-    # Process as they complete
+    tasks = [asyncio.create_task(_query_safe(m)) for m in successful_models]
+
     # Process as they complete
     pending = set(tasks)
     try:
         while pending:
             # Check for client disconnect
             if request and await request.is_disconnected():
-                print("Client disconnected during Stage 2. Cancelling tasks...")
+                logger.info("Client disconnected during Stage 2. Cancelling tasks...")
                 for t in pending:
                     t.cancel()
                 raise asyncio.CancelledError("Client disconnected")
@@ -284,7 +287,7 @@ async def stage2_collect_rankings(
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    print(f"Error processing task result: {e}")
+                    logger.error(f"Error processing task result: {e}")
 
     except asyncio.CancelledError:
         # Ensure all tasks are cancelled if we get cancelled
@@ -336,26 +339,41 @@ async def stage3_synthesize_final(
             search_context_block=search_context_block
         )
     except KeyError as e:
-        print(f"Error formatting Stage 3 prompt: {e}. Using fallback.")
+        logger.warning(f"Error formatting Stage 3 prompt: {e}. Using fallback.")
         chairman_prompt = f"Question: {user_query}\n\nSynthesis required."
 
     messages = [{"role": "user", "content": chairman_prompt}]
 
-    # Query the chairman model
+    # Query the chairman model with error handling
     chairman_model = get_chairman_model()
-    response = await query_model(chairman_model, messages)
 
-    if response is None:
-        # Fallback if chairman fails
+    try:
+        response = await query_model(chairman_model, messages)
+
+        # Check for error in response
+        if response is None or response.get('error'):
+            error_msg = response.get('error_message', 'Unknown error') if response else 'No response received'
+            return {
+                "model": chairman_model,
+                "response": f"Error synthesizing final answer: {error_msg}",
+                "error": True,
+                "error_message": error_msg
+            }
+
         return {
             "model": chairman_model,
-            "response": "Error: Unable to generate final synthesis."
+            "response": response.get('content', ''),
+            "error": False
         }
 
-    return {
-        "model": chairman_model,
-        "response": response.get('content', '')
-    }
+    except Exception as e:
+        logger.error(f"Unexpected error in Stage 3 synthesis: {e}")
+        return {
+            "model": chairman_model,
+            "response": f"Error: Unable to generate final synthesis due to unexpected error.",
+            "error": True,
+            "error_message": str(e)
+        }
 
 
 def parse_ranking_from_text(ranking_text: str) -> List[str]:
@@ -442,7 +460,7 @@ def calculate_aggregate_rankings(
 async def generate_conversation_title(user_query: str) -> str:
     """
     Generate a short title for a conversation based on the first user message.
-    
+
     Uses a simple heuristic (first few words) to avoid unnecessary API calls.
 
     Args:
@@ -451,17 +469,23 @@ async def generate_conversation_title(user_query: str) -> str:
     Returns:
         A short title (max 50 chars)
     """
+    # Validate input
+    if not user_query or not isinstance(user_query, str):
+        return "Untitled Conversation"
+
     # Simple heuristic: take first 50 chars
     title = user_query.strip()
-    
+
+    # If empty after stripping, return default
+    if not title:
+        return "Untitled Conversation"
+
     # Remove quotes if present
     title = title.strip('"\'')
-    
+
     # Truncate if too long
     if len(title) > 50:
         title = title[:47] + "..."
-        
-    return title
 
     return title
 
@@ -503,66 +527,3 @@ async def generate_search_query(user_query: str) -> str:
         return user_query[:100]
 
     return search_query[:100]
-
-
-async def run_full_council(user_query: str, use_web_search: bool = False) -> Tuple[List, List, Dict, Dict]:
-    """
-    Run the complete 3-stage council process.
-
-    Args:
-        user_query: The user's question
-        use_web_search: Whether to perform a web search for context
-
-    Returns:
-        Tuple of (stage1_results, stage2_results, stage3_result, metadata)
-    """
-    # Perform web search if requested
-    search_context = ""
-    search_query_used = ""
-    if use_web_search:
-        settings = get_settings()
-        provider = SearchProvider(settings.search_provider)
-        # Generate optimized search query from user's question
-        search_query_used = await generate_search_query(user_query)
-        # Run search in thread to avoid blocking the event loop
-        search_context = await asyncio.to_thread(
-            perform_web_search,
-            search_query_used,
-            5,
-            provider,
-            settings.full_content_results
-        )
-
-    # Stage 1: Collect individual responses
-    stage1_results = await stage1_collect_responses(user_query, search_context)
-
-    # If no models responded successfully, return error
-    if not stage1_results:
-        return [], [], {
-            "model": "error",
-            "response": "All models failed to respond. Please try again."
-        }, {}
-
-    # Stage 2: Collect rankings
-    stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results, search_context)
-
-    # Calculate aggregate rankings
-    aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-
-    # Stage 3: Synthesize final answer
-    stage3_result = await stage3_synthesize_final(
-        user_query,
-        stage1_results,
-        stage2_results,
-        search_context
-    )
-
-    # Prepare metadata
-    metadata = {
-        "label_to_model": label_to_model,
-        "aggregate_rankings": aggregate_rankings,
-        "search_query": search_query_used,  # The optimized search query used
-        "search_context": search_context  # Include search context in metadata for debugging/display
-    }
-
-    return stage1_results, stage2_results, stage3_result, metadata
