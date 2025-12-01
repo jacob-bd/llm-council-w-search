@@ -83,7 +83,9 @@ export default function ChatInterface({
               </p>
             </div>
             <div className="hero-footer">
-              Version: 1.0.0 • Created by: Jacob Ben-David
+              <span>Version: 1.0.0</span>
+              <span className="footer-separator">•</span>
+              <span>Created by: Jacob Ben-David</span>
             </div>
           </div>
         ) : (
