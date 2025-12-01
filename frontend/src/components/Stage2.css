@@ -95,9 +95,10 @@
 }
 
 .rank-score {
-  color: var(--text-muted);
+  color: #ffffff;
   font-size: 13px;
   font-family: var(--font-code);
+  font-weight: 600;
 }
 
 .rank-count {

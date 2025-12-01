@@ -140,7 +140,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
 
       {aggregateRankings && aggregateRankings.length > 0 && (
         <div className="aggregate-rankings">
-          <h4>Aggregate Rankings (Street Cred)</h4>
+          <h4>🏆 Aggregate Rankings (Street Cred)</h4>
           <p className="stage-description">
             Combined results across all peer evaluations (lower score is better):
           </p>
