@@ -19,10 +19,57 @@ function App() {
   const abortControllerRef = useRef(null);
   const requestIdRef = useRef(0);
 
-  // Auto-test Ollama connection on mount
+  // Check initial configuration on mount
   useEffect(() => {
-    testOllamaConnection();
+    checkInitialSetup();
   }, []);
+
+  const checkInitialSetup = async () => {
+    try {
+      // 1. Get Settings to check for API keys
+      const settings = await api.getSettings();
+      
+      const hasApiKey = settings.openrouter_api_key_set || 
+                        settings.groq_api_key_set || 
+                        settings.openai_api_key_set || 
+                        settings.anthropic_api_key_set || 
+                        settings.google_api_key_set || 
+                        settings.mistral_api_key_set || 
+                        settings.deepseek_api_key_set;
+
+      // 2. Test Ollama Connection
+      // We do this regardless to update the status indicator
+      const ollamaUrl = settings.ollama_base_url || 'http://localhost:11434';
+      setOllamaStatus(prev => ({ ...prev, testing: true }));
+      
+      let isOllamaConnected = false;
+      try {
+        const result = await api.testOllamaConnection(ollamaUrl);
+        isOllamaConnected = result.success;
+        
+        if (result.success) {
+          setOllamaStatus({
+            connected: true,
+            lastConnected: new Date().toLocaleString(),
+            testing: false
+          });
+        } else {
+          setOllamaStatus({ connected: false, lastConnected: null, testing: false });
+        }
+      } catch (err) {
+        console.error('Ollama initial test failed:', err);
+        setOllamaStatus({ connected: false, lastConnected: null, testing: false });
+      }
+
+      // 3. If no providers are configured, open settings
+      if (!hasApiKey && !isOllamaConnected) {
+        setShowSettings(true);
+      }
+
+    } catch (error) {
+      console.error('Failed to check initial setup:', error);
+    }
+  };
 
   // Load conversations on mount
   useEffect(() => {

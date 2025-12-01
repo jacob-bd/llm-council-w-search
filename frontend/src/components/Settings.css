@@ -665,6 +665,15 @@
   border-radius: 8px;
   border: 1px solid #e0e0e0;
   gap: 8px;
+  /* Ensure consistent sizing */
+  font-size: 14px; 
+  min-height: 42px;
+}
+
+.council-member-row:first-child {
+  /* Prevent any first-child specific scaling */
+  font-size: 14px;
+  margin-top: 0;
 }
 
 .model-type-toggle {

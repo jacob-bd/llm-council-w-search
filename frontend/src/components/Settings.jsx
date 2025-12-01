@@ -35,7 +35,7 @@ const DIRECT_PROVIDERS = [
 ];
 
 export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
-  const [activeSection, setActiveSection] = useState('council'); // 'council', 'api_keys', 'prompts', 'general'
+  const [activeSection, setActiveSection] = useState('llm_keys'); // 'llm_keys', 'council', 'prompts', 'search', 'import_export'
   
   const [settings, setSettings] = useState(null);
   const [selectedSearchProvider, setSelectedSearchProvider] = useState('duckduckgo');
@@ -706,40 +706,41 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
     setShowResetConfirm(false);
 
     try {
-      const defaults = await api.getDefaultSettings();
-
-      // General Settings
-      setSelectedSearchProvider('duckduckgo');
-      setFullContentResults(3);
-      setShowFreeOnly(false);
-
-      // Enabled Providers (auto-enable OpenRouter for default models)
-      setEnabledProviders(defaults.enabled_providers || {
-        openrouter: true,
+      // 1. Disable all providers
+      setEnabledProviders({
+        openrouter: false,
         ollama: false,
+        groq: false,
         direct: false
       });
 
-      // Council Configuration (unified)
-      setCouncilModels(defaults.council_models);
-      setChairmanModel(defaults.chairman_model);
-      
-      // Reset filters to Remote for all default members
-      const defaultFilters = {};
-      defaults.council_models.forEach((_, index) => {
-        defaultFilters[index] = 'remote';
+      setDirectProviderToggles({
+        openai: false,
+        anthropic: false,
+        google: false,
+        mistral: false,
+        deepseek: false
       });
-      setCouncilMemberFilters(defaultFilters);
-      setChairmanFilter('remote');
 
-      // Ollama Base URL
+      // 2. Reset Models to "Blank Slate" (User must select)
+      // Initialize with 3 empty slots for council
+      setCouncilModels(['', '', '']);
+      setChairmanModel('');
+      setSearchQueryModel('');
+      
+      // Reset filters to 'remote' default
+      setCouncilMemberFilters({ 0: 'remote', 1: 'remote', 2: 'remote' });
+      setChairmanFilter('remote');
+      setSearchQueryFilter('remote');
+
+      // 3. General Settings Defaults
+      setSelectedSearchProvider('duckduckgo');
+      setFullContentResults(3);
+      setShowFreeOnly(false);
       setOllamaBaseUrl('http://localhost:11434');
 
-      // Web Search Query Generator
-      setSearchQueryModel(defaults.search_query_model);
-      setSearchQueryFilter('remote'); // Ensure filter matches default model
-
-      // Prompts
+      // 4. Reset Prompts to System Defaults (keep these useful)
+      const defaults = await api.getDefaultSettings();
       setPrompts({
         stage1_prompt: defaults.stage1_prompt,
         stage2_prompt: defaults.stage2_prompt,
@@ -747,24 +748,13 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
         search_query_prompt: defaults.search_query_prompt
       });
 
-      // Check if any provider is actually ready to use
-      const hasOpenRouter = settings?.openrouter_api_key_set || openrouterApiKey;
-      const hasOllama = ollamaStatus?.connected;
-      const hasGroq = settings?.groq_api_key_set || groqApiKey;
-      const hasDirect = Object.keys(directKeys).some(k => directKeys[k] || settings?.[k + '_set']);
-
-      if (!hasOpenRouter && !hasOllama && !hasGroq && !hasDirect) {
-        setActiveSection('api_keys');
-        setSuccess(true);
-        // Custom message for this case handled in render or just use generic success with navigation
-        // We'll use a timeout to clear it, but the user is now in the right place
-      } else {
-        setSuccess(true);
-      }
+      setSuccess(true);
+      // Navigate to Council Config so user sees the blank state
+      setActiveSection('council');
       
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      setError('Failed to load default settings');
+      setError('Failed to reset settings');
     }
   };
 
@@ -1117,16 +1107,16 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
           {/* Sidebar Navigation */}
           <div className="settings-sidebar">
             <button 
+              className={`sidebar-nav-item ${activeSection === 'llm_keys' ? 'active' : ''}`}
+              onClick={() => setActiveSection('llm_keys')}
+            >
+              LLM API Keys
+            </button>
+            <button 
               className={`sidebar-nav-item ${activeSection === 'council' ? 'active' : ''}`}
               onClick={() => setActiveSection('council')}
             >
               Council Config
-            </button>
-            <button 
-              className={`sidebar-nav-item ${activeSection === 'api_keys' ? 'active' : ''}`}
-              onClick={() => setActiveSection('api_keys')}
-            >
-              API Keys
             </button>
             <button 
               className={`sidebar-nav-item ${activeSection === 'prompts' ? 'active' : ''}`}
@@ -1135,16 +1125,188 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
               System Prompts
             </button>
             <button 
-              className={`sidebar-nav-item ${activeSection === 'general' ? 'active' : ''}`}
-              onClick={() => setActiveSection('general')}
+              className={`sidebar-nav-item ${activeSection === 'search' ? 'active' : ''}`}
+              onClick={() => setActiveSection('search')}
             >
-              General & Search
+              Search Providers
+            </button>
+            <button 
+              className={`sidebar-nav-item ${activeSection === 'import_export' ? 'active' : ''}`}
+              onClick={() => setActiveSection('import_export')}
+            >
+              Import & Export
             </button>
           </div>
 
           {/* Main Content Area */}
           <div className="settings-main-panel">
             
+            {/* API KEYS (LLM API Keys) */}
+            {activeSection === 'llm_keys' && (
+              <section className="settings-section">
+                <h3>API Credentials</h3>
+                <p className="section-description">
+                  Configure keys for LLM providers. 
+                  Keys are <strong>auto-saved</strong> immediately upon successful test.
+                </p>
+
+                {/* OpenRouter */}
+                <div className="api-key-section">
+                  <label>OpenRouter API Key</label>
+                  <div className="api-key-input-row">
+                    <input
+                      type="password"
+                      placeholder={settings?.openrouter_api_key_set ? '••••••••••••••••' : 'Enter API key'}
+                      value={openrouterApiKey}
+                      onChange={(e) => {
+                        setOpenrouterApiKey(e.target.value);
+                        setOpenrouterTestResult(null);
+                      }}
+                      className={settings?.openrouter_api_key_set && !openrouterApiKey ? 'key-configured' : ''}
+                    />
+                    <button
+                      className="test-button"
+                      onClick={handleTestOpenRouter}
+                      disabled={!openrouterApiKey && !settings?.openrouter_api_key_set || isTestingOpenRouter}
+                    >
+                      {isTestingOpenRouter ? 'Testing...' : (settings?.openrouter_api_key_set && !openrouterApiKey ? 'Retest' : 'Test')}
+                    </button>
+                  </div>
+                  {settings?.openrouter_api_key_set && !openrouterApiKey && (
+                    <div className="key-status set">✓ API key configured</div>
+                  )}
+                  {openrouterTestResult && (
+                    <div className={`test-result ${openrouterTestResult.success ? 'success' : 'error'}`}>
+                      {openrouterTestResult.message}
+                    </div>
+                  )}
+                  <p className="api-key-hint">
+                    Get key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">openrouter.ai</a>
+                  </p>
+                </div>
+
+                {/* Groq */}
+                <div className="api-key-section">
+                  <label>Groq API Key</label>
+                  <div className="api-key-input-row">
+                    <input
+                      type="password"
+                      placeholder={settings?.groq_api_key_set ? '••••••••••••••••' : 'Enter API key'}
+                      value={groqApiKey}
+                      onChange={(e) => {
+                        setGroqApiKey(e.target.value);
+                        setGroqTestResult(null);
+                      }}
+                      className={settings?.groq_api_key_set && !groqApiKey ? 'key-configured' : ''}
+                    />
+                    <button
+                      className="test-button"
+                      onClick={handleTestGroq}
+                      disabled={!groqApiKey && !settings?.groq_api_key_set || isTestingGroq}
+                    >
+                      {isTestingGroq ? 'Testing...' : (settings?.groq_api_key_set && !groqApiKey ? 'Retest' : 'Test')}
+                    </button>
+                  </div>
+                  {settings?.groq_api_key_set && !groqApiKey && (
+                    <div className="key-status set">✓ API key configured</div>
+                  )}
+                  {groqTestResult && (
+                    <div className={`test-result ${groqTestResult.success ? 'success' : 'error'}`}>
+                      {groqTestResult.message}
+                    </div>
+                  )}
+                  <p className="api-key-hint">
+                    Get key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com</a>
+                  </p>
+                </div>
+
+                {/* Ollama */}
+                <div className="api-key-section">
+                  <label>Ollama Base URL</label>
+                  <div className="api-key-input-row">
+                    <input
+                      type="text"
+                      placeholder="http://localhost:11434"
+                      value={ollamaBaseUrl}
+                      onChange={(e) => {
+                        setOllamaBaseUrl(e.target.value);
+                        setOllamaTestResult(null);
+                      }}
+                    />
+                    <button
+                      className="test-button"
+                      onClick={handleTestOllama}
+                      disabled={!ollamaBaseUrl || isTestingOllama}
+                    >
+                      {isTestingOllama ? 'Testing...' : 'Connect'}
+                    </button>
+                  </div>
+                  {ollamaTestResult && (
+                    <div className={`test-result ${ollamaTestResult.success ? 'success' : 'error'}`}>
+                      {ollamaTestResult.message}
+                    </div>
+                  )}
+                  {ollamaStatus && ollamaStatus.connected && (
+                    <div className="ollama-auto-status connected">
+                      <span className="status-indicator connected">●</span>
+                      <span className="status-text">
+                        <strong>Connected</strong> <span className="status-separator">·</span> <span className="status-time">Last: {new Date(ollamaStatus.lastConnected).toLocaleTimeString()}</span>
+                      </span>
+                    </div>
+                  )}
+                  {ollamaStatus && !ollamaStatus.connected && !ollamaStatus.testing && (
+                    <div className="ollama-auto-status">
+                      <span className="status-indicator disconnected">●</span>
+                      <span className="status-text">Not connected</span>
+                    </div>
+                  )}
+                  <div className="model-options-row" style={{ marginTop: '12px' }}>
+                    <button
+                      type="button"
+                      className="reset-defaults-button"
+                      onClick={() => loadOllamaModels(ollamaBaseUrl)}
+                    >
+                      Refresh Local Models
+                    </button>
+                  </div>
+                </div>
+
+                {/* Direct LLM API Connections */}
+                <div className="subsection" style={{ marginTop: '24px' }}>
+                  <h4>Direct LLM Connections</h4>
+                  {DIRECT_PROVIDERS.map(dp => (
+                    <div key={dp.id} className="api-key-section">
+                      <label>{dp.name} API Key</label>
+                      <div className="api-key-input-row">
+                        <input
+                          type="password"
+                          placeholder={settings?.[`${dp.key}_set`] ? '••••••••••••••••' : 'Enter API key'}
+                          value={directKeys[dp.key]}
+                          onChange={e => setDirectKeys(prev => ({ ...prev, [dp.key]: e.target.value }))}
+                          className={settings?.[`${dp.key}_set`] && !directKeys[dp.key] ? 'key-configured' : ''}
+                        />
+                        <button
+                          className="test-button"
+                          onClick={() => handleTestDirectKey(dp.id, dp.key)}
+                          disabled={(!directKeys[dp.key] && !settings?.[`${dp.key}_set`]) || validatingKeys[dp.id]}
+                        >
+                          {validatingKeys[dp.id] ? 'Testing...' : (settings?.[`${dp.key}_set`] && !directKeys[dp.key] ? 'Retest' : 'Test')}
+                        </button>
+                      </div>
+                      {settings?.[`${dp.key}_set`] && !directKeys[dp.key] && (
+                        <div className="key-status set">✓ API key configured</div>
+                      )}
+                      {keyValidationStatus[dp.id] && (
+                        <div className={`test-result ${keyValidationStatus[dp.id].success ? 'success' : 'error'}`}>
+                          {keyValidationStatus[dp.id].message}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* COUNCIL CONFIGURATION */}
             {activeSection === 'council' && (
               <>
@@ -1473,172 +1635,6 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
               </>
             )}
 
-            {/* API KEYS */}
-            {activeSection === 'api_keys' && (
-              <section className="settings-section">
-                <h3>API Credentials</h3>
-                <p className="section-description">
-                  Configure keys for LLM providers. 
-                  Keys are <strong>auto-saved</strong> immediately upon successful test.
-                </p>
-
-                {/* OpenRouter */}
-                <div className="api-key-section">
-                  <label>OpenRouter API Key</label>
-                  <div className="api-key-input-row">
-                    <input
-                      type="password"
-                      placeholder={settings?.openrouter_api_key_set ? '••••••••••••••••' : 'Enter API key'}
-                      value={openrouterApiKey}
-                      onChange={(e) => {
-                        setOpenrouterApiKey(e.target.value);
-                        setOpenrouterTestResult(null);
-                      }}
-                      className={settings?.openrouter_api_key_set && !openrouterApiKey ? 'key-configured' : ''}
-                    />
-                    <button
-                      className="test-button"
-                      onClick={handleTestOpenRouter}
-                      disabled={!openrouterApiKey && !settings?.openrouter_api_key_set || isTestingOpenRouter}
-                    >
-                      {isTestingOpenRouter ? 'Testing...' : (settings?.openrouter_api_key_set && !openrouterApiKey ? 'Retest' : 'Test')}
-                    </button>
-                  </div>
-                  {settings?.openrouter_api_key_set && !openrouterApiKey && (
-                    <div className="key-status set">✓ API key configured</div>
-                  )}
-                  {openrouterTestResult && (
-                    <div className={`test-result ${openrouterTestResult.success ? 'success' : 'error'}`}>
-                      {openrouterTestResult.message}
-                    </div>
-                  )}
-                  <p className="api-key-hint">
-                    Get key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">openrouter.ai</a>
-                  </p>
-                </div>
-
-                {/* Groq */}
-                <div className="api-key-section">
-                  <label>Groq API Key</label>
-                  <div className="api-key-input-row">
-                    <input
-                      type="password"
-                      placeholder={settings?.groq_api_key_set ? '••••••••••••••••' : 'Enter API key'}
-                      value={groqApiKey}
-                      onChange={(e) => {
-                        setGroqApiKey(e.target.value);
-                        setGroqTestResult(null);
-                      }}
-                      className={settings?.groq_api_key_set && !groqApiKey ? 'key-configured' : ''}
-                    />
-                    <button
-                      className="test-button"
-                      onClick={handleTestGroq}
-                      disabled={!groqApiKey && !settings?.groq_api_key_set || isTestingGroq}
-                    >
-                      {isTestingGroq ? 'Testing...' : (settings?.groq_api_key_set && !groqApiKey ? 'Retest' : 'Test')}
-                    </button>
-                  </div>
-                  {settings?.groq_api_key_set && !groqApiKey && (
-                    <div className="key-status set">✓ API key configured</div>
-                  )}
-                  {groqTestResult && (
-                    <div className={`test-result ${groqTestResult.success ? 'success' : 'error'}`}>
-                      {groqTestResult.message}
-                    </div>
-                  )}
-                  <p className="api-key-hint">
-                    Get key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com</a>
-                  </p>
-                </div>
-
-                {/* Ollama */}
-                <div className="api-key-section">
-                  <label>Ollama Base URL</label>
-                  <div className="api-key-input-row">
-                    <input
-                      type="text"
-                      placeholder="http://localhost:11434"
-                      value={ollamaBaseUrl}
-                      onChange={(e) => {
-                        setOllamaBaseUrl(e.target.value);
-                        setOllamaTestResult(null);
-                      }}
-                    />
-                    <button
-                      className="test-button"
-                      onClick={handleTestOllama}
-                      disabled={!ollamaBaseUrl || isTestingOllama}
-                    >
-                      {isTestingOllama ? 'Testing...' : 'Connect'}
-                    </button>
-                  </div>
-                  {ollamaTestResult && (
-                    <div className={`test-result ${ollamaTestResult.success ? 'success' : 'error'}`}>
-                      {ollamaTestResult.message}
-                    </div>
-                  )}
-                  {ollamaStatus && ollamaStatus.connected && (
-                    <div className="ollama-auto-status connected">
-                      <span className="status-indicator connected">●</span>
-                      <span className="status-text">
-                        <strong>Connected</strong> <span className="status-separator">·</span> <span className="status-time">Last: {new Date(ollamaStatus.lastConnected).toLocaleTimeString()}</span>
-                      </span>
-                    </div>
-                  )}
-                  {ollamaStatus && !ollamaStatus.connected && !ollamaStatus.testing && (
-                    <div className="ollama-auto-status">
-                      <span className="status-indicator disconnected">●</span>
-                      <span className="status-text">Not connected</span>
-                    </div>
-                  )}
-                  <div className="model-options-row" style={{ marginTop: '12px' }}>
-                    <button
-                      type="button"
-                      className="reset-defaults-button"
-                      onClick={() => loadOllamaModels(ollamaBaseUrl)}
-                    >
-                      Refresh Local Models
-                    </button>
-                  </div>
-                </div>
-
-                {/* Direct LLM API Connections */}
-                <div className="subsection" style={{ marginTop: '24px' }}>
-                  <h4>Direct LLM Connections</h4>
-                  {DIRECT_PROVIDERS.map(dp => (
-                    <div key={dp.id} className="api-key-section">
-                      <label>{dp.name} API Key</label>
-                      <div className="api-key-input-row">
-                        <input
-                          type="password"
-                          placeholder={settings?.[`${dp.key}_set`] ? '••••••••••••••••' : 'Enter API key'}
-                          value={directKeys[dp.key]}
-                          onChange={e => setDirectKeys(prev => ({ ...prev, [dp.key]: e.target.value }))}
-                          className={settings?.[`${dp.key}_set`] && !directKeys[dp.key] ? 'key-configured' : ''}
-                        />
-                        <button
-                          className="test-button"
-                          onClick={() => handleTestDirectKey(dp.id, dp.key)}
-                          disabled={(!directKeys[dp.key] && !settings?.[`${dp.key}_set`]) || validatingKeys[dp.id]}
-                        >
-                          {validatingKeys[dp.id] ? 'Testing...' : (settings?.[`${dp.key}_set`] && !directKeys[dp.key] ? 'Retest' : 'Test')}
-                        </button>
-                      </div>
-                      {settings?.[`${dp.key}_set`] && !directKeys[dp.key] && (
-                        <div className="key-status set">✓ API key configured</div>
-                      )}
-                      {keyValidationStatus[dp.id] && (
-                        <div className={`test-result ${keyValidationStatus[dp.id].success ? 'success' : 'error'}`}>
-                          {keyValidationStatus[dp.id].message}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
             {/* SYSTEM PROMPTS */}
             {activeSection === 'prompts' && (
               <section className="settings-section">
@@ -1739,8 +1735,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
               </section>
             )}
 
-            {/* GENERAL & SEARCH */}
-            {activeSection === 'general' && (
+            {/* SEARCH PROVIDERS (New Section) */}
+            {activeSection === 'search' && (
               <section className="settings-section">
                 <h3>Web Search Provider</h3>
                 <div className="provider-options">
@@ -1849,37 +1845,58 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
                     <span className="full-content-value">{fullContentResults} results</span>
                   </div>
                 </div>
+              </section>
+            )}
 
-                {/* Import / Export */}
-                <div className="subsection" style={{ marginTop: '32px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
-                  <h4 style={{ margin: '0 0 4px 0' }}>Backup & Restore</h4>
-                  <p className="section-description" style={{ marginBottom: '12px' }}>
-                    Save your council configuration (models, prompts, settings) to a JSON file.
-                    <br/><em>Note: API keys are NOT exported for security.</em>
-                  </p>
-                  <div className="council-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* IMPORT & EXPORT (New Section) */}
+            {activeSection === 'import_export' && (
+              <section className="settings-section">
+                <h3>Backup & Restore</h3>
+                <p className="section-description">
+                  Save or restore your council configuration (models, prompts, settings).
+                  <br/><em>Note: API keys are NOT exported for security.</em>
+                </p>
+                
+                <div className="subsection">
+                    <div className="council-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
-                      type="file"
-                      id="import-council"
-                      style={{ display: 'none' }}
-                      accept=".json"
-                      onChange={handleImportCouncil}
+                        type="file"
+                        id="import-council"
+                        style={{ display: 'none' }}
+                        accept=".json"
+                        onChange={handleImportCouncil}
                     />
                     <button
-                      className="action-btn"
-                      onClick={() => document.getElementById('import-council').click()}
-                      title="Import Configuration"
+                        className="action-btn"
+                        onClick={() => document.getElementById('import-council').click()}
+                        title="Import Configuration"
                     >
-                      Import Config
+                        Import Config
                     </button>
                     <button
-                      className="action-btn"
-                      onClick={handleExportCouncil}
-                      title="Export Configuration"
+                        className="action-btn"
+                        onClick={handleExportCouncil}
+                        title="Export Configuration"
                     >
-                      Export Config
+                        Export Config
                     </button>
-                  </div>
+                    </div>
+                </div>
+
+                <div className="subsection" style={{ marginTop: '32px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
+                   <h4 style={{color: '#d32f2f'}}>Danger Zone</h4>
+                   <p className="section-description">
+                     Reset all settings to their default values. This will clear your council selection and custom prompts.
+                     API keys will be preserved.
+                   </p>
+                   <button 
+                     className="reset-button" 
+                     type="button" 
+                     onClick={handleResetToDefaults}
+                     style={{marginTop: '10px'}}
+                   >
+                     Reset to Defaults
+                   </button>
                 </div>
               </section>
             )}
@@ -1891,14 +1908,12 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
           {error && <div className="settings-error">{error}</div>}
           {success && (
             <div className="settings-success">
-              {activeSection === 'api_keys' && !settings?.openrouter_api_key_set && !ollamaStatus?.connected 
+              {activeSection === 'llm_keys' && !settings?.openrouter_api_key_set && !ollamaStatus?.connected 
                 ? 'Defaults loaded. Please configure an API Key.' 
                 : 'Settings saved!'}
             </div>
           )}
-          <button className="reset-button" type="button" onClick={handleResetToDefaults}>
-            Reset to Defaults
-          </button>
+          
           <div className="footer-actions">
             <button className="cancel-button" onClick={onClose}>
               Close
