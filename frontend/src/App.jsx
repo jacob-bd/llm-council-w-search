@@ -554,9 +554,28 @@ function App() {
         }
       }, abortControllerRef.current?.signal);
     } catch (error) {
-      // Don't show error for aborted requests
+      // Handle aborted requests - mark message as aborted
       if (error.name === 'AbortError') {
         console.log('Request aborted');
+        // Mark the assistant message as aborted
+        setCurrentConversation((prev) => {
+          if (!prev || prev.messages.length < 2) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          if (lastMsg.role === 'assistant') {
+            messages[messages.length - 1] = {
+              ...lastMsg,
+              aborted: true,
+              loading: {
+                search: false,
+                stage1: false,
+                stage2: false,
+                stage3: false,
+              }
+            };
+          }
+          return { ...prev, messages };
+        });
         return;
       }
       console.error('Failed to send message:', error);

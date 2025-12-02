@@ -479,3 +479,26 @@
   color: #6b7280;
   font-size: 13px;
 }
+
+/* Aborted Indicator */
+.aborted-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(251, 146, 60, 0.1);
+  border: 1px solid rgba(251, 146, 60, 0.3);
+  border-radius: 10px;
+  margin-top: 16px;
+}
+
+.aborted-icon {
+  font-size: 16px;
+  color: #fb923c;
+}
+
+.aborted-text {
+  color: #fdba74;
+  font-size: 14px;
+  font-family: var(--font-ui);
+}

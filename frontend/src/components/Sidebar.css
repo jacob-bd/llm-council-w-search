@@ -229,10 +229,29 @@
   color: #ef4444;
 }
 
+/* Stop Generation Button */
 .stop-generation-btn.small {
-  padding: 2px 8px;
-  font-size: 10px;
-  height: 20px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stop-generation-btn.small:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fca5a5;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
 }
 
 /* Mobile Responsive */

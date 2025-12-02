@@ -166,6 +166,17 @@ export default function ChatInterface({
                         endTime={msg.timers?.stage3End}
                       />
                     )}
+
+                    {/* Aborted Indicator */}
+                    {msg.aborted && (
+                      <div className="aborted-indicator">
+                        <span className="aborted-icon">⏹</span>
+                        <span className="aborted-text">
+                          Generation stopped by user.
+                          {msg.stage1 && !msg.stage3 && ' Partial results shown above.'}
+                        </span>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
