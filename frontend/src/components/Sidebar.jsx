@@ -38,23 +38,13 @@ export default function Sidebar({
     <div className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-title">LLM Council <span className="title-plus">Plus</span></div>
-        <div className="sidebar-actions-header">
-          <button 
-            className="icon-button" 
-            onClick={onNewConversation}
-            disabled={isLoading}
-            title="New Council"
-          >
-            +
-          </button>
-          <button 
-            className="icon-button" 
-            onClick={onOpenSettings}
-            title="Settings"
-          >
-            ⚙️
-          </button>
-        </div>
+        <button
+          className="icon-button"
+          onClick={onOpenSettings}
+          title="Settings"
+        >
+          ⚙️
+        </button>
       </div>
 
       {/* Prominent New Council Button */}
