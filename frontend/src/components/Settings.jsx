@@ -34,8 +34,8 @@ const DIRECT_PROVIDERS = [
   { id: 'deepseek', name: 'DeepSeek', key: 'deepseek_api_key' },
 ];
 
-export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
-  const [activeSection, setActiveSection] = useState('llm_keys'); // 'llm_keys', 'council', 'prompts', 'search', 'import_export'
+export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initialSection = 'llm_keys' }) {
+  const [activeSection, setActiveSection] = useState(initialSection); // 'llm_keys', 'council', 'prompts', 'search', 'import_export'
   
   const [settings, setSettings] = useState(null);
   const [selectedSearchProvider, setSelectedSearchProvider] = useState('duckduckgo');
@@ -193,19 +193,21 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
       return currentFilter;
     };
 
-    // Update Council Members
+    // Update Council Members - iterate over ALL members, not just existing filter keys
     setCouncilMemberFilters(prev => {
       const next = { ...prev };
       let changed = false;
-      Object.keys(next).forEach(key => {
-        const newFilter = getNewFilter(next[key]);
-        if (newFilter !== next[key]) {
-          next[key] = newFilter;
+      // Check all council member indices
+      for (let i = 0; i < councilModels.length; i++) {
+        const currentFilter = next[i] || 'remote'; // Default is 'remote'
+        const newFilter = getNewFilter(currentFilter);
+        if (newFilter !== currentFilter) {
+          next[i] = newFilter;
           changed = true;
           // Clear model if filter changed to force re-selection
-          handleCouncilModelChange(parseInt(key), '');
+          handleCouncilModelChange(i, '');
         }
-      });
+      }
       return changed ? next : prev;
     });
 
@@ -223,7 +225,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
       setSearchQueryModel('');
     }
 
-  }, [enabledProviders, chairmanFilter, searchQueryFilter]); // councilMemberFilters dependency omitted to avoid loops, handled via functional update
+  }, [enabledProviders, chairmanFilter, searchQueryFilter, councilModels.length]); // councilMemberFilters dependency omitted to avoid loops, handled via functional update
 
   const loadSettings = async () => {
     try {
@@ -1036,7 +1038,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
       models.push(...ollamaAvailableModels.map(m => ({
         ...m,
         id: `ollama:${m.id}`,
-        name: `${m.name || m.id} (Local)`
+        name: `${m.name || m.id} (Local)`,
+        provider: 'Ollama'
       })));
     }
 
@@ -1193,7 +1196,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
               className={`sidebar-nav-item ${activeSection === 'import_export' ? 'active' : ''}`}
               onClick={() => setActiveSection('import_export')}
             >
-              Import & Export
+              Backup & Reset
             </button>
           </div>
 
@@ -1489,11 +1492,12 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
                                   <h3>Council Composition</h3>
                                   <div className="model-options-row">
                                     <div className="model-filter-controls">
-                                      <label className="free-filter-label">
+                                      <label className="free-filter-label" style={{ opacity: enabledProviders.openrouter ? 1 : 0.3, cursor: enabledProviders.openrouter ? 'pointer' : 'not-allowed' }}>
                                         <input
                                           type="checkbox"
                                           checked={showFreeOnly}
                                           onChange={e => setShowFreeOnly(e.target.checked)}
+                                          disabled={!enabledProviders.openrouter}
                                         />
                                         Show free OpenRouter models only
                                         <div className="info-tooltip-container">
@@ -1912,7 +1916,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
             {/* IMPORT & EXPORT (New Section) */}
             {activeSection === 'import_export' && (
               <section className="settings-section">
-                <h3>Backup & Restore</h3>
+                <h3>Backup & Reset</h3>
                 <p className="section-description">
                   Save or restore your council configuration (models, prompts, settings).
                   <br/><em>Note: API keys are NOT exported for security.</em>

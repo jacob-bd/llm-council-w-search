@@ -435,3 +435,47 @@
     transform: rotate(360deg);
   }
 }
+
+/* Council Not Configured Message */
+.input-container.config-required {
+  justify-content: center;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.input-container.config-required:hover {
+  border-color: rgba(239, 68, 68, 0.6);
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.config-message {
+  color: #fca5a5;
+  font-size: 14px;
+  padding: 12px 0;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.config-link {
+  background: none;
+  border: none;
+  color: #60a5fa;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.config-link:hover {
+  color: #93c5fd;
+}
+
+.config-separator {
+  color: #6b7280;
+  font-size: 13px;
+}

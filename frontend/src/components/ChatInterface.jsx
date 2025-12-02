@@ -13,6 +13,8 @@ export default function ChatInterface({
   onSendMessage,
   onAbort,
   isLoading,
+  councilConfigured = true,
+  onOpenSettings,
 }) {
   const [input, setInput] = useState('');
   const [webSearch, setWebSearch] = useState(false);
@@ -177,40 +179,51 @@ export default function ChatInterface({
 
       {/* Floating Command Capsule */}
       <div className="input-area">
-        <form className="input-container" onSubmit={handleSubmit}>
-          <label className={`search-toggle ${webSearch ? 'active' : ''}`} title="Toggle Web Search">
-            <input 
-              type="checkbox" 
-              className="search-checkbox"
-              checked={webSearch}
-              onChange={() => setWebSearch(!webSearch)}
+        {!councilConfigured ? (
+          <div className="input-container config-required">
+            <span className="config-message">
+              ⚠️ Council not ready.
+              <button className="config-link" onClick={() => onOpenSettings('llm_keys')}>Configure API Keys</button>
+              <span className="config-separator">or</span>
+              <button className="config-link" onClick={() => onOpenSettings('council')}>Configure Council</button>
+            </span>
+          </div>
+        ) : (
+          <form className="input-container" onSubmit={handleSubmit}>
+            <label className={`search-toggle ${webSearch ? 'active' : ''}`} title="Toggle Web Search">
+              <input
+                type="checkbox"
+                className="search-checkbox"
+                checked={webSearch}
+                onChange={() => setWebSearch(!webSearch)}
+                disabled={isLoading}
+              />
+              <span className="search-icon">🌐</span>
+              {webSearch && <span className="search-label">Search On</span>}
+            </label>
+
+            <textarea
+              className="message-input"
+              placeholder={isLoading ? "Consulting..." : "Ask the Council..."}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
               disabled={isLoading}
+              rows={1}
+              style={{ height: 'auto', minHeight: '24px' }}
             />
-            <span className="search-icon">🌐</span>
-            {webSearch && <span className="search-label">Search On</span>}
-          </label>
-          
-          <textarea
-            className="message-input"
-            placeholder={isLoading ? "Consulting..." : "Ask the Council..."}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading}
-            rows={1}
-            style={{ height: 'auto', minHeight: '24px' }}
-          />
-          
-          {isLoading ? (
-            <button type="button" className="send-button stop-button" onClick={onAbort} title="Stop Generation">
-              ⏹
-            </button>
-          ) : (
-            <button type="submit" className="send-button" disabled={!input.trim()}>
-              ➤
-            </button>
-          )}
-        </form>
+
+            {isLoading ? (
+              <button type="button" className="send-button stop-button" onClick={onAbort} title="Stop Generation">
+                ⏹
+              </button>
+            ) : (
+              <button type="submit" className="send-button" disabled={!input.trim()}>
+                ➤
+              </button>
+            )}
+          </form>
+        )}
       </div>
     </div>
   );

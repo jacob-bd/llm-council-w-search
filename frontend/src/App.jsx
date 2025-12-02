@@ -11,11 +11,13 @@ function App() {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState('llm_keys');
   const [ollamaStatus, setOllamaStatus] = useState({
     connected: false,
     lastConnected: null,
     testing: false
   });
+  const [councilConfigured, setCouncilConfigured] = useState(true); // Assume configured until checked
   const abortControllerRef = useRef(null);
   const requestIdRef = useRef(0);
 
@@ -61,13 +63,33 @@ function App() {
         setOllamaStatus({ connected: false, lastConnected: null, testing: false });
       }
 
-      // 3. If no providers are configured, open settings
+      // 3. Check if council is configured (has models selected)
+      const councilModels = settings.council_models || [];
+      const hasCouncilMembers = councilModels.some(m => m && m.trim() !== '');
+      const hasChairman = settings.chairman_model && settings.chairman_model.trim() !== '';
+      setCouncilConfigured(hasCouncilMembers && hasChairman);
+
+      // 4. If no providers are configured, open settings
       if (!hasApiKey && !isOllamaConnected) {
         setShowSettings(true);
       }
 
     } catch (error) {
       console.error('Failed to check initial setup:', error);
+    }
+  };
+
+  // Re-check council configuration when settings close
+  const handleSettingsClose = async () => {
+    setShowSettings(false);
+    try {
+      const settings = await api.getSettings();
+      const councilModels = settings.council_models || [];
+      const hasCouncilMembers = councilModels.some(m => m && m.trim() !== '');
+      const hasChairman = settings.chairman_model && settings.chairman_model.trim() !== '';
+      setCouncilConfigured(hasCouncilMembers && hasChairman);
+    } catch (error) {
+      console.error('Failed to re-check council config:', error);
     }
   };
 
@@ -572,12 +594,18 @@ function App() {
         onSendMessage={handleSendMessage}
         onAbort={handleAbort}
         isLoading={isLoading}
+        councilConfigured={councilConfigured}
+        onOpenSettings={(section) => {
+          if (section) setSettingsInitialSection(section);
+          setShowSettings(true);
+        }}
       />
       {showSettings && (
         <Settings
-          onClose={() => setShowSettings(false)}
+          onClose={handleSettingsClose}
           ollamaStatus={ollamaStatus}
           onRefreshOllama={testOllamaConnection}
+          initialSection={settingsInitialSection}
         />
       )}
     </div>
