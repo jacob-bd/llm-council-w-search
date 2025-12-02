@@ -171,34 +171,35 @@
   padding: 6px 12px;
   font-size: 13px;
   cursor: pointer;
-  color: var(--text-secondary);
+  color: #9ca3af;
   border-radius: 6px;
   white-space: nowrap;
   transition: all 0.2s;
 }
 
 .prompt-tab:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
 }
 
 .prompt-tab.active {
-  background-color: var(--primary-color);
+  background-color: #3b82f6;
   color: white;
   font-weight: 500;
 }
 
 .provider-option-container {
-  border: 1px solid #d0d0d0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   overflow: hidden;
   transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .provider-option-container.selected {
-  border-color: #4a90e2;
-  background: #f5f9ff;
-  box-shadow: 0 0 0 1px #4a90e2;
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 1px #3b82f6;
 }
 
 .provider-option {
@@ -212,27 +213,27 @@
 }
 
 .provider-option:hover {
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .provider-config-nested {
   padding: 0 16px 16px 16px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   margin-top: 0;
-  background: #f5f9ff;
+  background: rgba(59, 130, 246, 0.05);
 }
 
 .provider-config-nested .api-key-section {
   margin-top: 16px;
-  background: white;
-  border: 1px solid #d0d0d0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 12px;
 }
 
 .provider-config-nested .section-description {
   margin-top: 12px;
   font-size: 13px;
-  color: #666;
+  color: #9ca3af;
 }
 
 .provider-option input[type="radio"] {
@@ -248,17 +249,17 @@
 .provider-name {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: #e5e7eb;
 }
 
 .provider-description {
   font-size: 12px;
-  color: #666;
+  color: #9ca3af;
 }
 
 .setting-description {
   font-size: 13px;
-  color: #666;
+  color: #9ca3af;
   margin: 4px 0 12px 0;
   line-height: 1.4;
 }
@@ -273,16 +274,16 @@
 .api-key-section {
   margin-top: 16px;
   padding: 20px;
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
-  border: 1px solid #eee;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .api-key-section label {
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: #e5e7eb;
   margin-bottom: 8px;
 }
 
@@ -296,33 +297,34 @@
 .api-key-section input {
   flex: 1;
   padding: 10px 12px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   font-size: 14px;
-  background: white;
+  background: rgba(0, 0, 0, 0.2);
+  color: #e5e7eb;
   box-sizing: border-box;
 }
 
 .inline-api-key-section input.key-configured,
 .api-key-section input.key-configured {
-  border-color: #a5d6a7;
-  background: #f1f8f2;
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.1);
 }
 
 .inline-api-key-section input:focus,
 .api-key-section input:focus {
   outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .test-button {
   padding: 10px 16px;
-  background: #fff;
-  border: 1px solid #d0d0d0;
+  background: transparent;
+  border: 1px solid #3b82f6;
   border-radius: 6px;
   font-size: 13px;
-  color: #333;
+  color: #3b82f6;
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
@@ -330,8 +332,9 @@
 }
 
 .test-button:hover:not(:disabled) {
-  background: #f0f0f0;
-  border-color: #999;
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #60a5fa;
+  color: #60a5fa;
 }
 
 .test-button:disabled {
@@ -347,21 +350,21 @@
 }
 
 .test-result.success {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #a5d6a7;
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .test-result.error {
-  background: #ffebee;
-  color: #c62828;
-  border: 1px solid #ffcdd2;
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .api-key-hint {
   margin: 8px 0 0 0;
   font-size: 12px;
-  color: #666;
+  color: #9ca3af;
 }
 
 .api-key-hint a {
@@ -382,17 +385,17 @@
 }
 
 .key-status.set {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #a5d6a7;
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .ollama-auto-status {
   margin-top: 12px;
   padding: 12px 16px;
   border-radius: 8px;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -400,12 +403,12 @@
 }
 
 .ollama-auto-status.connected {
-  background: #e8f5e9;
-  border: 1px solid #a5d6a7;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .status-separator {
-  color: #ccc;
+  color: rgba(255, 255, 255, 0.3);
   margin: 0 4px;
 }
 
@@ -415,20 +418,20 @@
 }
 
 .status-indicator.connected {
-  color: #2e7d32;
+  color: #4ade80;
 }
 
 .status-indicator.disconnected {
-  color: #999;
+  color: #6b7280;
 }
 
 .status-text {
-  color: #333;
+  color: #e5e7eb;
   font-weight: 500;
 }
 
 .status-time {
-  color: #666;
+  color: #9ca3af;
   font-weight: 400;
   font-size: 12px;
 }
@@ -823,16 +826,16 @@
 .full-content-section {
   margin-top: 16px;
   padding: 20px;
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .full-content-section label {
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: #e5e7eb;
   margin-bottom: 4px;
 }
 
@@ -851,7 +854,7 @@
   height: 6px;
   -webkit-appearance: none;
   appearance: none;
-  background: #ddd;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 3px;
   outline: none;
 }
@@ -997,7 +1000,7 @@ input:checked+.slider:before {
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: #60a5fa;
   margin-bottom: 4px;
 }
 
@@ -1049,16 +1052,17 @@ input:checked+.slider:before {
 
 .prompt-help {
   font-size: 12px;
-  color: #666;
+  color: #9ca3af;
   margin: 0;
 }
 
 .prompt-help code {
-  background: #f0f0f0;
+  background: rgba(59, 130, 246, 0.15);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: monospace;
-  color: #d63384;
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .prompt-content textarea {
@@ -1085,18 +1089,19 @@ input:checked+.slider:before {
 .reset-prompt-btn {
   align-self: flex-start;
   background: none;
-  border: 1px solid #e0e0e0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 12px;
-  color: #666;
+  color: #9ca3af;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .reset-prompt-btn:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: var(--text-primary);
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #ef4444;
 }
 
 /* Rate Limit Warning Banner */
