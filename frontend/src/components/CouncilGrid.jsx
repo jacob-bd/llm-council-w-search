@@ -70,6 +70,10 @@ export default function CouncilGrid({
     // If no models provided, show placeholders
     const displayModels = models.length > 0 ? models : ['placeholder-1', 'placeholder-2', 'placeholder-3'];
 
+    // Debug: Log model IDs
+    console.log('CouncilGrid Models:', models);
+    console.log('CouncilGrid Chairman:', chairman);
+
     // Tooltip State
     const [tooltip, setTooltip] = React.useState({ visible: false, x: 0, y: 0, content: '' });
 
@@ -94,6 +98,9 @@ export default function CouncilGrid({
     const handleMouseLeave = () => {
         setTooltip(prev => ({ ...prev, visible: false }));
     };
+
+    // Helper to get chairman info
+    const chairmanInfo = chairman ? getProviderInfo(chairman) : null;
 
     return (
         <div className="council-grid">
@@ -162,14 +169,22 @@ export default function CouncilGrid({
             {/* Chairman Card (Always last or distinct) */}
             <div
                 className="council-card chairman ready"
-                style={{ '--provider-color': '#fbbf24' }} // Gold for Chairman
+                style={{ '--provider-color': chairman ? getProviderInfo(chairman).color : '#fbbf24' }}
                 onMouseEnter={(e) => handleMouseEnter(e, chairman || 'Chairman')}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
             >
                 <div className="role-badge chairman">Chairman</div>
                 <div className="council-avatar">
-                    <span className="avatar-icon">⚖️</span>
+                    {chairmanInfo && chairmanInfo.logo ? (
+                        <img
+                            src={chairmanInfo.logo}
+                            alt={chairmanInfo.label}
+                            className="provider-logo"
+                        />
+                    ) : (
+                        <span className="avatar-icon">{chairmanInfo ? chairmanInfo.icon : '⚖️'}</span>
+                    )}
                 </div>
                 <div className="council-info">
                     <span className="model-name">

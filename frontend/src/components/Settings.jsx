@@ -36,7 +36,7 @@ const DIRECT_PROVIDERS = [
 
 export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initialSection = 'llm_keys' }) {
   const [activeSection, setActiveSection] = useState(initialSection); // 'llm_keys', 'council', 'prompts', 'search', 'import_export'
-  
+
   const [settings, setSettings] = useState(null);
   const [selectedSearchProvider, setSelectedSearchProvider] = useState('duckduckgo');
   const [fullContentResults, setFullContentResults] = useState(3);
@@ -558,12 +558,12 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     // Check Chairman and Search Query Model
     const chairmanModelData = availableModels.find(m => m.id === chairmanModel || m.id === chairmanModel.replace('openrouter:', ''));
     if (chairmanModelData && chairmanModelData.is_free && (!chairmanModel.includes(':') || chairmanModel.startsWith('openrouter:'))) {
-        openRouterFreeCount++;
+      openRouterFreeCount++;
     }
 
     const searchQueryModelData = availableModels.find(m => m.id === searchQueryModel || m.id === searchQueryModel.replace('openrouter:', ''));
     if (searchQueryModelData && searchQueryModelData.is_free && (!searchQueryModel.includes(':') || searchQueryModel.startsWith('openrouter:'))) {
-        openRouterFreeCount++;
+      openRouterFreeCount++;
     }
 
     // Logic for OpenRouter Warnings
@@ -609,7 +609,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   const handleFeelingLucky = () => {
     // 1. Get pool of available models respecting "Free Only" filter
     let candidateModels = getFilteredAvailableModels();
-    
+
     if (!candidateModels || candidateModels.length === 0) {
       setError("No models available to randomize! Check your enabled providers.");
       setTimeout(() => setError(null), 3000);
@@ -619,10 +619,10 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     // Filter out models with known small context windows (< 8k) to prevent Stage 2 errors
     // Note: context_length might be undefined for some providers, we assume those are safe or unknown
     const safeModels = candidateModels.filter(m => !m.context_length || m.context_length >= 8192);
-    
+
     // If we have enough safe models, use them. Otherwise fallback to all.
     if (safeModels.length >= 2) {
-        candidateModels = safeModels;
+      candidateModels = safeModels;
     }
 
     // Helper to pick random item
@@ -644,30 +644,30 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       if (remainingModels.length === 0) {
         remainingModels = [...candidateModels];
       }
-      
+
       const randomIndex = Math.floor(Math.random() * remainingModels.length);
       const selectedModel = remainingModels[randomIndex];
-      
+
       newCouncilModels.push(selectedModel.id);
       newMemberFilters[i] = getFilterForModel(selectedModel.id);
-      
+
       // Remove selected to avoid duplicates (until we run out)
       remainingModels.splice(randomIndex, 1);
     }
 
     // 3. Randomize Chairman
     const randomChairman = pickRandom(candidateModels);
-    
+
     // 4. Randomize Search Query
     const randomSearch = pickRandom(candidateModels);
 
     // Apply Updates
     setCouncilModels(newCouncilModels);
     setCouncilMemberFilters(newMemberFilters);
-    
+
     setChairmanModel(randomChairman.id);
     setChairmanFilter(getFilterForModel(randomChairman.id));
-    
+
     setSearchQueryModel(randomSearch.id);
     setSearchQueryFilter(getFilterForModel(randomSearch.id));
 
@@ -1110,7 +1110,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
 
   const selectedProviderInfo = SEARCH_PROVIDERS.find(p => p.id === selectedSearchProvider);
 
-    const renderModelOptions = (models) => {
+  const renderModelOptions = (models) => {
     // Group models by provider
     const grouped = models.reduce((acc, model) => {
       let providerLabel = model.provider; // Start with the provider field from backend
@@ -1168,31 +1168,31 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         <div className="settings-body">
           {/* Sidebar Navigation */}
           <div className="settings-sidebar">
-            <button 
+            <button
               className={`sidebar-nav-item ${activeSection === 'llm_keys' ? 'active' : ''}`}
               onClick={() => setActiveSection('llm_keys')}
             >
               LLM API Keys
             </button>
-            <button 
+            <button
               className={`sidebar-nav-item ${activeSection === 'council' ? 'active' : ''}`}
               onClick={() => setActiveSection('council')}
             >
               Council Config
             </button>
-            <button 
+            <button
               className={`sidebar-nav-item ${activeSection === 'prompts' ? 'active' : ''}`}
               onClick={() => setActiveSection('prompts')}
             >
               System Prompts
             </button>
-            <button 
+            <button
               className={`sidebar-nav-item ${activeSection === 'search' ? 'active' : ''}`}
               onClick={() => setActiveSection('search')}
             >
               Search Providers
             </button>
-            <button 
+            <button
               className={`sidebar-nav-item ${activeSection === 'import_export' ? 'active' : ''}`}
               onClick={() => setActiveSection('import_export')}
             >
@@ -1202,13 +1202,13 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
 
           {/* Main Content Area */}
           <div className="settings-main-panel">
-            
+
             {/* API KEYS (LLM API Keys) */}
             {activeSection === 'llm_keys' && (
               <section className="settings-section">
                 <h3>API Credentials</h3>
                 <p className="section-description">
-                  Configure keys for LLM providers. 
+                  Configure keys for LLM providers.
                   Keys are <strong>auto-saved</strong> immediately upon successful test.
                 </p>
 
@@ -1461,18 +1461,18 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                                 const isEnabled = e.target.checked;
                                 setDirectProviderToggles(prev => {
                                   const newState = { ...prev, [dp.id]: isEnabled };
-                                  
+
                                   // Auto-enable master if any child is enabled
                                   if (isEnabled && !enabledProviders.direct) {
                                     setEnabledProviders(prevEP => ({ ...prevEP, direct: true }));
                                   }
-                                  
+
                                   // Auto-disable master if ALL children are disabled
                                   const hasAnyEnabled = Object.values(newState).some(v => v);
                                   if (!hasAnyEnabled && enabledProviders.direct) {
                                     setEnabledProviders(prevEP => ({ ...prevEP, direct: false }));
                                   }
-                                  
+
                                   return newState;
                                 });
                               }}
@@ -1488,126 +1488,126 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                   </div>
                 </section>
 
-                                  <section className="settings-section">
-                                  <h3>Council Composition</h3>
-                                  <div className="model-options-row">
-                                    <div className="model-filter-controls">
-                                      <label className="free-filter-label" style={{ opacity: enabledProviders.openrouter ? 1 : 0.3, cursor: enabledProviders.openrouter ? 'pointer' : 'not-allowed' }}>
-                                        <input
-                                          type="checkbox"
-                                          checked={showFreeOnly}
-                                          onChange={e => setShowFreeOnly(e.target.checked)}
-                                          disabled={!enabledProviders.openrouter}
-                                        />
-                                        Show free OpenRouter models only
-                                        <div className="info-tooltip-container">
-                                          <span className="info-icon">i</span>
-                                          <div className="info-tooltip">
-                                            Free OpenRouter models are limited to 20 requests/minute and 50/day (without credits). Large councils generate many requests at once.
-                                          </div>
-                                        </div>
-                                      </label>
-                                      {isLoadingModels && <span className="loading-models">Loading models...</span>}
-                                    </div>
-                                  </div>
-                                  <div className="lucky-button-container">
-                                    <button
-                                      type="button"
-                                      className="lucky-button"
-                                      onClick={handleFeelingLucky}
-                                      title="Randomize models from enabled sources"
-                                    >
-                                      🎲 I'm Feeling Lucky
-                                    </button>
-                                  </div>                                      
-                                                        {/* Council Members */}                                  <div className="subsection" style={{ marginTop: '20px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                      <h4 style={{ margin: 0 }}>Council Members</h4>
-                                    </div>
-                                    <div className="council-members">
-                                      {councilModels.map((modelId, index) => {
-                                        const memberFilter = getMemberFilter(index);
-                                        return (
-                                          <div key={index} className="council-member-row">
-                                            <span className="member-label">Member {index + 1}</span>
-                                            <div className="model-type-toggle">
-                                              <button
-                                                type="button"
-                                                className={`type-btn ${memberFilter === 'remote' ? 'active' : ''}`}
-                                                onClick={() => handleMemberFilterChange(index, 'remote')}
-                                                disabled={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq}
-                                                title={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq ? 'Enable OpenRouter, Groq, or Direct Connections first' : ''}
-                                              >
-                                                Remote
-                                              </button>
-                                              <button
-                                                type="button"
-                                                className={`type-btn ${memberFilter === 'local' ? 'active' : ''}`}
-                                                onClick={() => handleMemberFilterChange(index, 'local')}
-                                                disabled={!enabledProviders.ollama || ollamaAvailableModels.length === 0}
-                                                title={!enabledProviders.ollama || ollamaAvailableModels.length === 0 ? 'Enable and connect Ollama first' : ''}
-                                              >
-                                                Local
-                                              </button>
-                                            </div>
-                                            <select
-                                              value={modelId}
-                                              onChange={e => handleCouncilModelChange(index, e.target.value)}
-                                              className="model-select"
-                                            >
-                                              <option value="">Select a model</option>
-                                              {renderModelOptions(filterByRemoteLocal(getFilteredAvailableModels(), memberFilter))}
-                                              {/* Keep current selection visible even if filtered out */}
-                                              {!filterByRemoteLocal(getFilteredAvailableModels(), memberFilter).find(m => m.id === modelId) && (
-                                                <option value={modelId}>
-                                                  {getAllAvailableModels().find(m => m.id === modelId)?.name || modelId}
-                                                </option>
-                                              )}
-                                            </select>
-                                            {index >= 2 && (
-                                              <button
-                                                type="button"
-                                                className="remove-member-button"
-                                                onClick={() => handleRemoveCouncilMember(index)}
-                                                title="Remove member"
-                                              >
-                                                ×
-                                              </button>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="add-member-button"
-                                      onClick={handleAddCouncilMember}
-                                      disabled={getFilteredAvailableModels().length === 0 || councilModels.length >= 8}
-                                    >
-                                      + Add Council Member
-                                    </button>
-                                    <p className="section-description" style={{ marginTop: '8px', marginBottom: '0' }}>
-                                      Max 8 members. With 6+ members, requests are processed in batches.
-                                    </p>
-                                    {councilModels.length >= 6 && (
-                                      <div className="council-size-warning">
-                                        ⚠️ <strong>6+ members:</strong> Requests will be processed in batches of 3 to avoid rate limits.
-                                      </div>
-                                    )}
-                                    
-                                    {/* Rate Limit Warning Banner */}
-                                    {rateLimitWarning && (
-                                      <div className={`rate-limit-warning ${rateLimitWarning.type}`}>
-                                        <span className="warning-icon">
-                                          {rateLimitWarning.type === 'error' ? '🛑' : '⚠️'}
-                                        </span>
-                                        <div>
-                                          <strong>{rateLimitWarning.title}</strong><br/>
-                                          {rateLimitWarning.message}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
+                <section className="settings-section">
+                  <h3>Council Composition</h3>
+                  <div className="model-options-row">
+                    <div className="model-filter-controls">
+                      <label className="free-filter-label" style={{ opacity: enabledProviders.openrouter ? 1 : 0.3, cursor: enabledProviders.openrouter ? 'pointer' : 'not-allowed' }}>
+                        <input
+                          type="checkbox"
+                          checked={showFreeOnly}
+                          onChange={e => setShowFreeOnly(e.target.checked)}
+                          disabled={!enabledProviders.openrouter}
+                        />
+                        Show free OpenRouter models only
+                        <div className="info-tooltip-container">
+                          <span className="info-icon">i</span>
+                          <div className="info-tooltip">
+                            Free OpenRouter models are limited to 20 requests/minute and 50/day (without credits). Large councils generate many requests at once.
+                          </div>
+                        </div>
+                      </label>
+                      {isLoadingModels && <span className="loading-models">Loading models...</span>}
+                    </div>
+                  </div>
+                  <div className="lucky-button-container">
+                    <button
+                      type="button"
+                      className="lucky-button"
+                      onClick={handleFeelingLucky}
+                      title="Randomize models from enabled sources"
+                    >
+                      🎲 I'm Feeling Lucky
+                    </button>
+                  </div>
+                  {/* Council Members */}                                  <div className="subsection" style={{ marginTop: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <h4 style={{ margin: 0 }}>Council Members</h4>
+                    </div>
+                    <div className="council-members">
+                      {councilModels.map((modelId, index) => {
+                        const memberFilter = getMemberFilter(index);
+                        return (
+                          <div key={index} className="council-member-row">
+                            <span className="member-label">Member {index + 1}</span>
+                            <div className="model-type-toggle">
+                              <button
+                                type="button"
+                                className={`type-btn ${memberFilter === 'remote' ? 'active' : ''}`}
+                                onClick={() => handleMemberFilterChange(index, 'remote')}
+                                disabled={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq}
+                                title={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq ? 'Enable OpenRouter, Groq, or Direct Connections first' : ''}
+                              >
+                                Remote
+                              </button>
+                              <button
+                                type="button"
+                                className={`type-btn ${memberFilter === 'local' ? 'active' : ''}`}
+                                onClick={() => handleMemberFilterChange(index, 'local')}
+                                disabled={!enabledProviders.ollama || ollamaAvailableModels.length === 0}
+                                title={!enabledProviders.ollama || ollamaAvailableModels.length === 0 ? 'Enable and connect Ollama first' : ''}
+                              >
+                                Local
+                              </button>
+                            </div>
+                            <select
+                              value={modelId}
+                              onChange={e => handleCouncilModelChange(index, e.target.value)}
+                              className="model-select"
+                            >
+                              <option value="">Select a model</option>
+                              {renderModelOptions(filterByRemoteLocal(getFilteredAvailableModels(), memberFilter))}
+                              {/* Keep current selection visible even if filtered out */}
+                              {!filterByRemoteLocal(getFilteredAvailableModels(), memberFilter).find(m => m.id === modelId) && (
+                                <option value={modelId}>
+                                  {getAllAvailableModels().find(m => m.id === modelId)?.name || modelId}
+                                </option>
+                              )}
+                            </select>
+                            {index >= 2 && (
+                              <button
+                                type="button"
+                                className="remove-member-button"
+                                onClick={() => handleRemoveCouncilMember(index)}
+                                title="Remove member"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      className="add-member-button"
+                      onClick={handleAddCouncilMember}
+                      disabled={getFilteredAvailableModels().length === 0 || councilModels.length >= 8}
+                    >
+                      + Add Council Member
+                    </button>
+                    <p className="section-description" style={{ marginTop: '8px', marginBottom: '0' }}>
+                      Max 8 members. With 6+ members, requests are processed in batches.
+                    </p>
+                    {councilModels.length >= 6 && (
+                      <div className="council-size-warning">
+                        ⚠️ <strong>6+ members:</strong> Requests will be processed in batches of 3 to avoid rate limits.
+                      </div>
+                    )}
+
+                    {/* Rate Limit Warning Banner */}
+                    {rateLimitWarning && (
+                      <div className={`rate-limit-warning ${rateLimitWarning.type}`}>
+                        <span className="warning-icon">
+                          {rateLimitWarning.type === 'error' ? '🛑' : '⚠️'}
+                        </span>
+                        <div>
+                          <strong>{rateLimitWarning.title}</strong><br />
+                          {rateLimitWarning.message}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {/* Chairman */}
                   <div className="subsection" style={{ marginTop: '24px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -1919,49 +1919,49 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                 <h3>Backup & Reset</h3>
                 <p className="section-description">
                   Save or restore your council configuration (models, prompts, settings).
-                  <br/><em>Note: API keys are NOT exported for security.</em>
+                  <br /><em>Note: API keys are NOT exported for security.</em>
                 </p>
-                
+
                 <div className="subsection">
-                    <div className="council-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div className="council-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
-                        type="file"
-                        id="import-council"
-                        style={{ display: 'none' }}
-                        accept=".json"
-                        onChange={handleImportCouncil}
+                      type="file"
+                      id="import-council"
+                      style={{ display: 'none' }}
+                      accept=".json"
+                      onChange={handleImportCouncil}
                     />
                     <button
-                        className="action-btn"
-                        onClick={() => document.getElementById('import-council').click()}
-                        title="Import Configuration"
+                      className="action-btn"
+                      onClick={() => document.getElementById('import-council').click()}
+                      title="Import Configuration"
                     >
-                        Import Config
+                      Import Config
                     </button>
                     <button
-                        className="action-btn"
-                        onClick={handleExportCouncil}
-                        title="Export Configuration"
+                      className="action-btn"
+                      onClick={handleExportCouncil}
+                      title="Export Configuration"
                     >
-                        Export Config
+                      Export Config
                     </button>
-                    </div>
+                  </div>
                 </div>
 
                 <div className="subsection" style={{ marginTop: '32px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                   <h4 style={{color: '#f87171'}}>Danger Zone</h4>
-                   <p className="section-description">
-                     Reset all settings to their default values. This will clear your council selection and custom prompts.
-                     API keys will be preserved.
-                   </p>
-                   <button 
-                     className="reset-button" 
-                     type="button" 
-                     onClick={handleResetToDefaults}
-                     style={{marginTop: '10px'}}
-                   >
-                     Reset to Defaults
-                   </button>
+                  <h4 style={{ color: '#f87171' }}>Danger Zone</h4>
+                  <p className="section-description">
+                    Reset all settings to their default values. This will clear your council selection and custom prompts.
+                    API keys will be preserved.
+                  </p>
+                  <button
+                    className="reset-button"
+                    type="button"
+                    onClick={handleResetToDefaults}
+                    style={{ marginTop: '10px' }}
+                  >
+                    Reset to Defaults
+                  </button>
                 </div>
               </section>
             )}
@@ -1973,12 +1973,12 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           {error && <div className="settings-error">{error}</div>}
           {success && (
             <div className="settings-success">
-              {activeSection === 'llm_keys' && !settings?.openrouter_api_key_set && !ollamaStatus?.connected 
-                ? 'Defaults loaded. Please configure an API Key.' 
+              {activeSection === 'llm_keys' && !settings?.openrouter_api_key_set && !ollamaStatus?.connected
+                ? 'Defaults loaded. Please configure an API Key.'
                 : 'Settings saved!'}
             </div>
           )}
-          
+
           <div className="footer-actions">
             <button className="cancel-button" onClick={onClose}>
               Close
@@ -1993,7 +1993,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           </div>
         </div>
       </div>
-      
+
       {showResetConfirm && (
         <div className="settings-overlay confirmation-overlay" onClick={() => setShowResetConfirm(false)}>
           <div className="settings-modal confirmation-modal" onClick={e => e.stopPropagation()}>

@@ -743,7 +743,7 @@ async def get_openrouter_models():
                 is_free = prompt_price == 0 and completion_price == 0
 
                 models.append({
-                    "id": model.get("id"),
+                    "id": f"openrouter:{model.get('id')}",
                     "name": f"{model.get('name', model.get('id'))} [OpenRouter]",
                     "context_length": model.get("context_length"),
                     "is_free": is_free,

@@ -9,6 +9,10 @@ class OpenRouterProvider(LLMProvider):
     """OpenRouter API provider."""
     
     async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+        # Strip internal prefix if present
+        if model_id.startswith("openrouter:"):
+            model_id = model_id.replace("openrouter:", "", 1)
+            
         # OpenRouter module handles key retrieval internally
         return await openrouter.query_model(model_id, messages, timeout)
 
@@ -55,7 +59,7 @@ class OpenRouterProvider(LLMProvider):
                     is_free = prompt_price == 0 and completion_price == 0
                     
                     models.append({
-                        "id": model.get("id"),
+                        "id": f"openrouter:{model.get('id')}",
                         "name": f"{model.get('name', model.get('id'))} [OpenRouter]",
                         "provider": "OpenRouter",
                         "is_free": is_free
