@@ -312,6 +312,11 @@ class UpdateSettingsRequest(BaseModel):
     ollama_base_url: Optional[str] = None
     full_content_results: Optional[int] = None
 
+    # Custom OpenAI-compatible endpoint
+    custom_endpoint_name: Optional[str] = None
+    custom_endpoint_url: Optional[str] = None
+    custom_endpoint_api_key: Optional[str] = None
+
     # API Keys
     tavily_api_key: Optional[str] = None
     brave_api_key: Optional[str] = None
@@ -443,6 +448,14 @@ async def update_app_settings(request: UpdateSettingsRequest):
 
     if request.ollama_base_url is not None:
         updates["ollama_base_url"] = request.ollama_base_url
+
+    # Custom endpoint
+    if request.custom_endpoint_name is not None:
+        updates["custom_endpoint_name"] = request.custom_endpoint_name
+    if request.custom_endpoint_url is not None:
+        updates["custom_endpoint_url"] = request.custom_endpoint_url
+    if request.custom_endpoint_api_key is not None:
+        updates["custom_endpoint_api_key"] = request.custom_endpoint_api_key
 
     if request.full_content_results is not None:
         # Validate range

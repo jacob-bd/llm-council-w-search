@@ -182,12 +182,16 @@ function App() {
     }
   }, [currentConversationId]);
 
-  const loadConversations = async () => {
+  const loadConversations = async (retryCount = 0) => {
     try {
       const convs = await api.listConversations();
       setConversations(convs);
     } catch (error) {
       console.error('Failed to load conversations:', error);
+      // Retry up to 3 times with increasing delays (1s, 2s, 3s)
+      if (retryCount < 3) {
+        setTimeout(() => loadConversations(retryCount + 1), (retryCount + 1) * 1000);
+      }
     }
   };
 

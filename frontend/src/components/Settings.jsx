@@ -114,7 +114,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   const [enabledProviders, setEnabledProviders] = useState({
     openrouter: true,
     ollama: false,
-    direct: false  // Master toggle for all direct connections
+    groq: false,
+    direct: false,  // Master toggle for all direct connections
+    custom: false   // Custom OpenAI-compatible endpoint
   });
 
   // Individual direct provider toggles
@@ -217,7 +219,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   ]);
 
   // Helper to determine if filters need to switch based on availability
-  const isRemoteAvailable = enabledProviders.openrouter || enabledProviders.direct || enabledProviders.groq;
+  const isRemoteAvailable = enabledProviders.openrouter || enabledProviders.direct || enabledProviders.groq || enabledProviders.custom;
   const isLocalAvailable = enabledProviders.ollama;
 
   const getNewFilter = (currentFilter) => {
@@ -750,7 +752,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
 
     // Determine best default filter based on what's available
     let defaultFilter = 'remote';
-    const isRemoteAvailable = enabledProviders.openrouter || enabledProviders.direct || enabledProviders.groq;
+    const isRemoteAvailable = enabledProviders.openrouter || enabledProviders.direct || enabledProviders.groq || enabledProviders.custom;
     const isLocalAvailable = enabledProviders.ollama && ollamaAvailableModels.length > 0;
 
     if (!isRemoteAvailable && isLocalAvailable) {
@@ -1145,8 +1147,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       models.push(...filteredDirectModels);
     }
 
-    // Add custom endpoint models if configured
-    if (customEndpointModels.length > 0) {
+    // Add custom endpoint models if enabled and configured
+    if (enabledProviders.custom && customEndpointModels.length > 0) {
       models.push(...customEndpointModels);
     }
 
@@ -1527,18 +1529,17 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                       </button>
                     </div>
 
-                    {settings?.custom_endpoint_url && !customEndpointUrl && (
-                      <div className="key-status set">✓ Endpoint configured: {settings.custom_endpoint_name}</div>
+                    {/* Show configured status when endpoint is saved */}
+                    {settings?.custom_endpoint_url && (
+                      <div className="key-status set">
+                        ✓ Endpoint configured
+                        {customEndpointModels.length > 0 && ` · ${customEndpointModels.length} models available`}
+                      </div>
                     )}
                     {customEndpointTestResult && (
                       <div className={`test-result ${customEndpointTestResult.success ? 'success' : 'error'}`}>
                         {customEndpointTestResult.message}
                       </div>
-                    )}
-                    {customEndpointModels.length > 0 && (
-                      <p className="api-key-hint" style={{ marginTop: '8px' }}>
-                        {customEndpointModels.length} models available from {settings?.custom_endpoint_name || customEndpointName}
-                      </p>
                     )}
                   </form>
                 </div>
@@ -1593,6 +1594,21 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                         </div>
                         <span className="toggle-text">Groq (Fast Inference)</span>
                       </label>
+
+                      {/* Custom Endpoint Toggle - only show if configured */}
+                      {(settings?.custom_endpoint_url || customEndpointUrl) && (
+                        <label className="toggle-wrapper">
+                          <div className="toggle-switch">
+                            <input
+                              type="checkbox"
+                              checked={enabledProviders.custom}
+                              onChange={(e) => setEnabledProviders(prev => ({ ...prev, custom: e.target.checked }))}
+                            />
+                            <span className="slider"></span>
+                          </div>
+                          <span className="toggle-text">{settings?.custom_endpoint_name || customEndpointName || 'Custom Endpoint'}</span>
+                        </label>
+                      )}
                     </div>
 
                     <div className="filter-divider"></div>
@@ -1711,8 +1727,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                                 type="button"
                                 className={`type-btn ${memberFilter === 'remote' ? 'active' : ''}`}
                                 onClick={() => handleMemberFilterChange(index, 'remote')}
-                                disabled={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq}
-                                title={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq ? 'Enable OpenRouter, Groq, or Direct Connections first' : ''}
+                                disabled={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq && !enabledProviders.custom}
+                                title={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq && !enabledProviders.custom ? 'Enable a remote provider first' : ''}
                               >
                                 Remote
                               </button>
@@ -1830,8 +1846,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                             setChairmanFilter('remote');
                             setChairmanModel('');
                           }}
-                          disabled={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq}
-                          title={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq ? 'Enable OpenRouter, Groq, or Direct Connections first' : ''}
+                          disabled={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq && !enabledProviders.custom}
+                          title={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq && !enabledProviders.custom ? 'Enable a remote provider first' : ''}
                         >
                           Remote
                         </button>

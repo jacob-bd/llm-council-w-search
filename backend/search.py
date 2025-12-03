@@ -63,6 +63,32 @@ ROLE_PLAY_TITLES = {
 }
 
 
+def _preprocess_query(query: str) -> str:
+    """
+    Remove noise phrases and role-play titles from query BEFORE keyword extraction.
+    This prevents YAKE from extracting words from these phrases.
+    """
+    import re
+    cleaned = query
+
+    # Remove role-play patterns like "act as a financial analyst"
+    # This catches variations like "act as an expert", "acting as a consultant", etc.
+    cleaned = re.sub(r'\b(act(ing)?|behave|pretend|imagine you are|you are|be) as (a|an|the)?\s*\w+(\s+\w+)?\b', '', cleaned, flags=re.IGNORECASE)
+
+    # Remove specific role-play titles
+    for title in ROLE_PLAY_TITLES:
+        cleaned = re.sub(rf'\b{re.escape(title)}\b', '', cleaned, flags=re.IGNORECASE)
+
+    # Remove noise phrases
+    for phrase in NOISE_PHRASES:
+        cleaned = re.sub(rf'\b{re.escape(phrase)}\b', '', cleaned, flags=re.IGNORECASE)
+
+    # Clean up extra whitespace
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+    return cleaned
+
+
 def extract_search_keywords(query: str, max_keywords: int = 6) -> str:
     """
     Extract keywords from a user query using YAKE.
@@ -80,9 +106,12 @@ def extract_search_keywords(query: str, max_keywords: int = 6) -> str:
         return query.strip()
 
     try:
+        # Pre-process: Remove noise phrases and role-play titles BEFORE YAKE extraction
+        cleaned_query = _preprocess_query(query)
+
         extractor = get_keyword_extractor()
         # YAKE returns list of (keyword, score) tuples, lower score = more important
-        keywords = extractor.extract_keywords(query)
+        keywords = extractor.extract_keywords(cleaned_query)
 
         if not keywords:
             return query.strip()
@@ -178,7 +207,8 @@ async def perform_web_search(
     query: str,
     max_results: int = 5,
     provider: SearchProvider = SearchProvider.DUCKDUCKGO,
-    full_content_results: int = 3
+    full_content_results: int = 3,
+    keyword_extraction: str = "direct"
 ) -> Dict[str, str]:
     """
     Perform a web search using the specified provider.
@@ -188,12 +218,16 @@ async def perform_web_search(
         max_results: Maximum number of results to return
         provider: Which search provider to use
         full_content_results: Number of top results to fetch full content for (0 to disable)
+        keyword_extraction: "yake" for keyword extraction, "direct" for raw query
 
     Returns:
         Dict with 'results' (formatted string) and 'extracted_query' (keywords used)
     """
-    # Extract keywords from user query for better search results
-    extracted_query = extract_search_keywords(query)
+    # Extract keywords from user query if enabled, otherwise use direct query
+    if keyword_extraction == "yake":
+        extracted_query = extract_search_keywords(query)
+    else:
+        extracted_query = query.strip()
 
     try:
         if provider == SearchProvider.TAVILY:

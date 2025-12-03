@@ -24,7 +24,8 @@ DEFAULT_ENABLED_PROVIDERS = {
     "openrouter": True,
     "ollama": False,
     "groq": False,
-    "direct": False  # Master toggle for all direct connections
+    "direct": False,  # Master toggle for all direct connections
+    "custom": False   # Custom OpenAI-compatible endpoint
 }
 
 # Default direct provider toggles (individual)

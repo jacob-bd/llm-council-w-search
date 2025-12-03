@@ -11,6 +11,7 @@ import ollamaLogo from '../assets/icons/ollama.svg';
 import deepseekLogo from '../assets/icons/deepseek.svg';
 import groqLogo from '../assets/icons/groq.svg';
 import openrouterLogo from '../assets/icons/openrouter.svg';
+import customLogo from '../assets/icons/openai-compatible.svg';
 
 const PROVIDER_CONFIG = {
     openai: { color: '#10a37f', label: 'OpenAI', logo: openaiLogo },
@@ -21,6 +22,7 @@ const PROVIDER_CONFIG = {
     ollama: { color: '#ffffff', label: 'Local', logo: ollamaLogo },
     deepseek: { color: '#4e61e6', label: 'DeepSeek', logo: deepseekLogo },
     openrouter: { color: '#7f5af0', label: 'OpenRouter', logo: openrouterLogo },
+    custom: { color: '#06b6d4', label: 'Custom', logo: customLogo },
     default: { color: '#888888', label: 'Model', logo: null, icon: '🤖' }
 };
 
@@ -28,12 +30,13 @@ const getProviderInfo = (modelId) => {
     if (!modelId) return PROVIDER_CONFIG.default;
     const id = modelId.toLowerCase();
 
-    // Check for provider prefixes FIRST
+    // Check for provider prefixes FIRST (order matters!)
+    if (id.startsWith('custom:')) return PROVIDER_CONFIG.custom;
     if (id.startsWith('ollama:')) return PROVIDER_CONFIG.ollama;
     if (id.startsWith('groq:')) return PROVIDER_CONFIG.groq;
     if (id.startsWith('openrouter:') || id.includes('openrouter')) return PROVIDER_CONFIG.openrouter;
 
-    // Then check for specific model identifiers
+    // Then check for specific model identifiers (only if no prefix matched)
     if (id.includes('gpt') || id.includes('openai')) return PROVIDER_CONFIG.openai;
     if (id.includes('claude') || id.includes('anthropic')) return PROVIDER_CONFIG.anthropic;
     if (id.includes('gemini') || id.includes('google')) return PROVIDER_CONFIG.google;
