@@ -1,58 +1,15 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 import SearchableModelSelect from './SearchableModelSelect';
+import ProviderSettings from './settings/ProviderSettings';
+import CouncilConfig from './settings/CouncilConfig';
+import SearchSettings from './settings/SearchSettings';
+import PromptSettings from './settings/PromptSettings';
 import './Settings.css';
 
-// Provider icons
-import openrouterIcon from '../assets/icons/openrouter.svg';
-import groqIcon from '../assets/icons/groq.svg';
-import ollamaIcon from '../assets/icons/ollama.svg';
-import openaiIcon from '../assets/icons/openai.svg';
-import anthropicIcon from '../assets/icons/anthropic.svg';
-import googleIcon from '../assets/icons/google.svg';
-import mistralIcon from '../assets/icons/mistral.svg';
-import deepseekIcon from '../assets/icons/deepseek.svg';
-import customEndpointIcon from '../assets/icons/openai-compatible.svg';
 
-const PROVIDER_ICONS = {
-  openai: openaiIcon,
-  anthropic: anthropicIcon,
-  google: googleIcon,
-  mistral: mistralIcon,
-  deepseek: deepseekIcon,
-};
 
-const SEARCH_PROVIDERS = [
-  {
-    id: 'duckduckgo',
-    name: 'DuckDuckGo',
-    description: 'News search. Fast and free.',
-    requiresKey: false,
-    keyType: null,
-  },
-  {
-    id: 'tavily',
-    name: 'Tavily',
-    description: 'Purpose-built for LLMs. Returns rich, relevant content. Requires API key.',
-    requiresKey: true,
-    keyType: 'tavily',
-  },
-  {
-    id: 'brave',
-    name: 'Brave Search',
-    description: 'Privacy-focused search. 2,000 free queries/month. Requires API key.',
-    requiresKey: true,
-    keyType: 'brave',
-  },
-];
 
-const DIRECT_PROVIDERS = [
-  { id: 'openai', name: 'OpenAI', key: 'openai_api_key' },
-  { id: 'anthropic', name: 'Anthropic', key: 'anthropic_api_key' },
-  { id: 'google', name: 'Google', key: 'google_api_key' },
-  { id: 'mistral', name: 'Mistral', key: 'mistral_api_key' },
-  { id: 'deepseek', name: 'DeepSeek', key: 'deepseek_api_key' },
-];
 
 export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initialSection = 'llm_keys' }) {
   const [activeSection, setActiveSection] = useState(initialSection); // 'llm_keys', 'council', 'prompts', 'search', 'import_export'
@@ -440,18 +397,20 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   };
 
   const handleTestTavily = async () => {
-    if (!tavilyApiKey) {
+    if (!tavilyApiKey && !settings.tavily_api_key_set) {
       setTavilyTestResult({ success: false, message: 'Please enter an API key first' });
       return;
     }
     setIsTestingTavily(true);
     setTavilyTestResult(null);
     try {
-      const result = await api.testTavilyKey(tavilyApiKey);
+      // If input is empty but key is configured, pass null to test the saved key
+      const keyToTest = tavilyApiKey || null;
+      const result = await api.testTavilyKey(keyToTest);
       setTavilyTestResult(result);
 
-      // Auto-save API key if validation succeeds
-      if (result.success) {
+      // Auto-save API key if validation succeeds and a new key was provided
+      if (result.success && tavilyApiKey) {
         await api.updateSettings({ tavily_api_key: tavilyApiKey });
         setTavilyApiKey(''); // Clear input after save
 
@@ -469,18 +428,20 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   };
 
   const handleTestBrave = async () => {
-    if (!braveApiKey) {
+    if (!braveApiKey && !settings.brave_api_key_set) {
       setBraveTestResult({ success: false, message: 'Please enter an API key first' });
       return;
     }
     setIsTestingBrave(true);
     setBraveTestResult(null);
     try {
-      const result = await api.testBraveKey(braveApiKey);
+      // If input is empty but key is configured, pass null to test the saved key
+      const keyToTest = braveApiKey || null;
+      const result = await api.testBraveKey(keyToTest);
       setBraveTestResult(result);
 
-      // Auto-save API key if validation succeeds
-      if (result.success) {
+      // Auto-save API key if validation succeeds and a new key was provided
+      if (result.success && braveApiKey) {
         await api.updateSettings({ brave_api_key: braveApiKey });
         setBraveApiKey(''); // Clear input after save
 
@@ -538,7 +499,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     try {
       // If input is empty but key is configured, test with saved key via generic provider test
       // Note: backend/providers/groq.py must be registered with id 'groq'
-      const result = await api.testProviderKey('groq', groqApiKey || 'saved');
+      // Pass empty string if using stored key, backend will handle it
+      const result = await api.testProviderKey('groq', groqApiKey || "");
       setGroqTestResult(result);
 
       // Auto-save API key if validation succeeds and a new key was provided
@@ -601,9 +563,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     });
   };
 
-  const getMemberFilter = (index) => {
-    return councilMemberFilters[index] || 'remote';
-  };
+
 
   const handleMemberFilterChange = (index, filter) => {
     setCouncilMemberFilters(prev => ({
@@ -624,7 +584,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     if (!settings || !availableModels || availableModels.length === 0) return null;
 
     let openRouterFreeCount = 0;
-    let groqCount = 0; // Number of models (council, chairman, search) using Groq
+
     const totalCouncilMembers = councilModels.length;
     let totalRequestsPerRun = (totalCouncilMembers * 2) + 2; // Stage 1, Stage 2, Chairman, Search Query
 
@@ -802,11 +762,17 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   const handleResetPrompt = async (key) => {
     try {
       const defaults = await api.getDefaultSettings();
-      if (defaults[key]) {
+      console.log('Defaults fetched:', defaults);
+      if (defaults[key] !== undefined) {
         handlePromptChange(key, defaults[key]);
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      } else {
+        console.warn(`Default for key ${key} not found in defaults`, defaults);
       }
     } catch (err) {
       console.error("Failed to fetch default prompt", err);
+      setError("Failed to reset prompt");
     }
   };
 
@@ -835,15 +801,16 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       });
 
       // 2. Reset Models to "Blank Slate" (User must select)
-      // Initialize with 4 empty slots for council
-      setCouncilModels(['', '', '', '']);
+      // Initialize with 2 empty slots for council
+      setCouncilModels(['', '']);
       setChairmanModel('');
       setCouncilTemperature(0.5);
       setChairmanTemperature(0.4);
       setStage2Temperature(0.3);
 
       // Reset filters to 'remote' default
-      setCouncilMemberFilters({ 0: 'remote', 1: 'remote', 2: 'remote', 3: 'remote' });
+      // Reset filters to 'remote' default
+      setCouncilMemberFilters({ 0: 'remote', 1: 'remote' });
       setChairmanFilter('remote');
 
       // 3. General Settings Defaults
@@ -879,19 +846,18 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           mistral: false,
           deepseek: false
         },
-        council_models: ['', '', '', ''],
+        council_models: ['', ''],
         chairman_model: '',
         council_temperature: 0.5,
         chairman_temperature: 0.4,
         stage2_temperature: 0.3,
         search_query_model: '',
-        council_member_filters: { 0: 'remote', 1: 'remote', 2: 'remote', 3: 'remote' },
+        council_member_filters: { 0: 'remote', 1: 'remote' },
         chairman_filter: 'remote',
         search_query_filter: 'remote',
         stage1_prompt: defaults.stage1_prompt,
         stage2_prompt: defaults.stage2_prompt,
         stage3_prompt: defaults.stage3_prompt,
-
       };
       await api.updateSettings(updates);
 
@@ -907,13 +873,15 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
 
   const handleTestDirectKey = async (providerId, keyField) => {
     const apiKey = directKeys[keyField];
-    if (!apiKey) return;
+    // Allow if key is entered OR if it's already set (Retest mode)
+    if (!apiKey && !settings?.[`${keyField}_set`]) return;
 
     setValidatingKeys(prev => ({ ...prev, [providerId]: true }));
     setKeyValidationStatus(prev => ({ ...prev, [providerId]: null }));
 
     try {
-      const result = await api.testProviderKey(providerId, apiKey);
+      // Pass empty string if using stored key, backend will handle it
+      const result = await api.testProviderKey(providerId, apiKey || "");
       setKeyValidationStatus(prev => ({
         ...prev,
         [providerId]: {
@@ -922,8 +890,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         }
       }));
 
-      // Auto-save API key if validation succeeds
-      if (result.success) {
+      // Auto-save API key if validation succeeds AND it was a new key
+      if (result.success && apiKey) {
         await api.updateSettings({ [keyField]: apiKey });
         setDirectKeys(prev => ({ ...prev, [keyField]: '' })); // Clear input after save
 
@@ -1207,12 +1175,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     });
   };
 
-  // Get models available for chairman (paid models only, unless it's Ollama)
-  const getChairmanModels = () => {
-    const all = getAllAvailableModels();
-    // Chairman should be a paid/premium model (or local Ollama)
-    return all.filter(m => !m.is_free || m.id.startsWith('ollama:'));
-  };
+
 
   // Filter models by remote/local for specific use case
   const filterByRemoteLocal = (models, filter) => {
@@ -1235,57 +1198,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     );
   }
 
-  const selectedProviderInfo = SEARCH_PROVIDERS.find(p => p.id === selectedSearchProvider);
 
-  const renderModelOptions = (models) => {
-    // Group models by provider
-    const grouped = models.reduce((acc, model) => {
-      let providerLabel;
 
-      // Determine provider from explicit field or infer from model ID
-      const provider = model.provider || (model.id?.startsWith('ollama:') ? 'Ollama' : 'OpenRouter');
 
-      if (provider === 'OpenRouter') {
-        providerLabel = 'OpenRouter (Cloud)';
-      } else if (provider === 'Ollama') {
-        providerLabel = 'Local (Ollama)';
-      } else {
-        // For all other providers (OpenAI, Anthropic, Google, Mistral, DeepSeek, Groq)
-        // from direct connections, append '(Direct)'
-        providerLabel = `${provider} (Direct)`;
-      }
-
-      if (!acc[providerLabel]) acc[providerLabel] = [];
-      acc[providerLabel].push(model);
-      return acc;
-    }, {});
-
-    // Sort providers - prioritize direct, then specific vendors, then local
-    const providerOrder = [
-      'OpenAI (Direct)', 'Anthropic (Direct)', 'Google (Direct)', 'Mistral (Direct)', 'DeepSeek (Direct)',
-      'Groq (Direct)',
-      'OpenRouter (Cloud)',
-      'Local (Ollama)'
-    ];
-    const sortedProviders = Object.keys(grouped).sort((a, b) => {
-      const indexA = providerOrder.indexOf(a);
-      const indexB = providerOrder.indexOf(b);
-      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-      return a.localeCompare(b);
-    });
-
-    return sortedProviders.map(provider => (
-      <optgroup key={provider} label={provider}>
-        {grouped[provider].map(model => (
-          <option key={model.id} value={model.id}>
-            {model.name}
-          </option>
-        ))}
-      </optgroup>
-    ));
-  };
 
   return (
     <div className="settings-overlay" onClick={onClose}>
@@ -1335,875 +1250,127 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
 
             {/* API KEYS (LLM API Keys) */}
             {activeSection === 'llm_keys' && (
-              <section className="settings-section">
-                <h3>LLM API Keys</h3>
-                <p className="section-description">
-                  Configure keys for LLM providers.
-                  Keys are <strong>auto-saved</strong> immediately upon successful test.
-                </p>
-
-                {/* OpenRouter */}
-                <form className="api-key-section" onSubmit={e => e.preventDefault()}>
-                  <label>
-                    <img src={openrouterIcon} alt="" className="provider-icon" />
-                    OpenRouter API Key
-                  </label>
-                  <div className="api-key-input-row">
-                    <input
-                      type="password"
-                      placeholder={settings?.openrouter_api_key_set ? '••••••••••••••••' : 'Enter API key'}
-                      value={openrouterApiKey}
-                      onChange={(e) => {
-                        setOpenrouterApiKey(e.target.value);
-                        setOpenrouterTestResult(null);
-                      }}
-                      className={settings?.openrouter_api_key_set && !openrouterApiKey ? 'key-configured' : ''}
-                    />
-                    <button
-                      className="test-button"
-                      onClick={handleTestOpenRouter}
-                      disabled={!openrouterApiKey && !settings?.openrouter_api_key_set || isTestingOpenRouter}
-                    >
-                      {isTestingOpenRouter ? 'Testing...' : (settings?.openrouter_api_key_set && !openrouterApiKey ? 'Retest' : 'Test')}
-                    </button>
-                  </div>
-                  {settings?.openrouter_api_key_set && !openrouterApiKey && (
-                    <div className="key-status set">✓ API key configured</div>
-                  )}
-                  {openrouterTestResult && (
-                    <div className={`test-result ${openrouterTestResult.success ? 'success' : 'error'}`}>
-                      {openrouterTestResult.message}
-                    </div>
-                  )}
-                  <p className="api-key-hint">
-                    Get key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">openrouter.ai</a>
-                  </p>
-                </form>
-
-                {/* Groq */}
-                <form className="api-key-section" onSubmit={e => e.preventDefault()}>
-                  <label>
-                    <img src={groqIcon} alt="" className="provider-icon" />
-                    Groq API Key
-                  </label>
-                  <div className="api-key-input-row">
-                    <input
-                      type="password"
-                      placeholder={settings?.groq_api_key_set ? '••••••••••••••••' : 'Enter API key'}
-                      value={groqApiKey}
-                      onChange={(e) => {
-                        setGroqApiKey(e.target.value);
-                        setGroqTestResult(null);
-                      }}
-                      className={settings?.groq_api_key_set && !groqApiKey ? 'key-configured' : ''}
-                    />
-                    <button
-                      className="test-button"
-                      onClick={handleTestGroq}
-                      disabled={!groqApiKey && !settings?.groq_api_key_set || isTestingGroq}
-                    >
-                      {isTestingGroq ? 'Testing...' : (settings?.groq_api_key_set && !groqApiKey ? 'Retest' : 'Test')}
-                    </button>
-                  </div>
-                  {settings?.groq_api_key_set && !groqApiKey && (
-                    <div className="key-status set">✓ API key configured</div>
-                  )}
-                  {groqTestResult && (
-                    <div className={`test-result ${groqTestResult.success ? 'success' : 'error'}`}>
-                      {groqTestResult.message}
-                    </div>
-                  )}
-                  <p className="api-key-hint">
-                    Get key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com</a>
-                  </p>
-                </form>
-
-                {/* Ollama */}
-                <form className="api-key-section" onSubmit={e => e.preventDefault()}>
-                  <label>
-                    <img src={ollamaIcon} alt="" className="provider-icon" />
-                    Ollama Base URL
-                  </label>
-                  <div className="api-key-input-row">
-                    <input
-                      type="text"
-                      placeholder="http://localhost:11434"
-                      value={ollamaBaseUrl}
-                      onChange={(e) => {
-                        setOllamaBaseUrl(e.target.value);
-                        setOllamaTestResult(null);
-                      }}
-                    />
-                    <button
-                      className="test-button"
-                      onClick={handleTestOllama}
-                      disabled={!ollamaBaseUrl || isTestingOllama}
-                    >
-                      {isTestingOllama ? 'Testing...' : 'Connect'}
-                    </button>
-                  </div>
-                  {ollamaTestResult && (
-                    <div className={`test-result ${ollamaTestResult.success ? 'success' : 'error'}`}>
-                      {ollamaTestResult.message}
-                    </div>
-                  )}
-                  {ollamaStatus && ollamaStatus.connected && (
-                    <div className="ollama-auto-status connected">
-                      <span className="status-indicator connected">●</span>
-                      <span className="status-text">
-                        <strong>Connected</strong> <span className="status-separator">·</span> <span className="status-time">Last: {new Date(ollamaStatus.lastConnected).toLocaleTimeString()}</span>
-                      </span>
-                    </div>
-                  )}
-                  {ollamaStatus && !ollamaStatus.connected && !ollamaStatus.testing && (
-                    <div className="ollama-auto-status">
-                      <span className="status-indicator disconnected">●</span>
-                      <span className="status-text">Not connected</span>
-                    </div>
-                  )}
-                  <div className="model-options-row" style={{ marginTop: '12px' }}>
-                    <button
-                      type="button"
-                      className="reset-defaults-button"
-                      onClick={() => loadOllamaModels(ollamaBaseUrl)}
-                    >
-                      Refresh Local Models
-                    </button>
-                  </div>
-                </form>
-
-                {/* Direct LLM API Connections */}
-                <div className="subsection" style={{ marginTop: '24px' }}>
-                  <h4>Direct LLM Connections</h4>
-                  {DIRECT_PROVIDERS.map(dp => (
-                    <form key={dp.id} className="api-key-section" onSubmit={e => e.preventDefault()}>
-                      <label>
-                        <img src={PROVIDER_ICONS[dp.id]} alt="" className="provider-icon" />
-                        {dp.name} API Key
-                      </label>
-                      <div className="api-key-input-row">
-                        <input
-                          type="password"
-                          placeholder={settings?.[`${dp.key}_set`] ? '••••••••••••••••' : 'Enter API key'}
-                          value={directKeys[dp.key]}
-                          onChange={e => setDirectKeys(prev => ({ ...prev, [dp.key]: e.target.value }))}
-                          className={settings?.[`${dp.key}_set`] && !directKeys[dp.key] ? 'key-configured' : ''}
-                        />
-                        <button
-                          className="test-button"
-                          onClick={() => handleTestDirectKey(dp.id, dp.key)}
-                          disabled={(!directKeys[dp.key] && !settings?.[`${dp.key}_set`]) || validatingKeys[dp.id]}
-                        >
-                          {validatingKeys[dp.id] ? 'Testing...' : (settings?.[`${dp.key}_set`] && !directKeys[dp.key] ? 'Retest' : 'Test')}
-                        </button>
-                      </div>
-                      {settings?.[`${dp.key}_set`] && !directKeys[dp.key] && (
-                        <div className="key-status set">✓ API key configured</div>
-                      )}
-                      {keyValidationStatus[dp.id] && (
-                        <div className={`test-result ${keyValidationStatus[dp.id].success ? 'success' : 'error'}`}>
-                          {keyValidationStatus[dp.id].message}
-                        </div>
-                      )}
-                    </form>
-                  ))}
-                </div>
-
-                {/* Custom OpenAI-compatible Endpoint */}
-                <div className="subsection" style={{ marginTop: '24px' }}>
-                  <h4>Custom OpenAI-Compatible Endpoint</h4>
-                  <p className="subsection-description" style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px' }}>
-                    Connect to any OpenAI-compatible API (Together AI, Fireworks, vLLM, LM Studio, etc.)
-                  </p>
-                  <form className="api-key-section" onSubmit={e => e.preventDefault()}>
-                    <label>
-                      <img src={customEndpointIcon} alt="" className="provider-icon" />
-                      Display Name
-                    </label>
-                    <div className="api-key-input-row">
-                      <input
-                        type="text"
-                        placeholder="e.g., Together AI, My vLLM Server"
-                        value={customEndpointName}
-                        onChange={(e) => {
-                          setCustomEndpointName(e.target.value);
-                          setCustomEndpointTestResult(null);
-                        }}
-                      />
-                    </div>
-
-                    <label style={{ marginTop: '12px' }}>Base URL</label>
-                    <div className="api-key-input-row">
-                      <input
-                        type="text"
-                        placeholder="https://api.together.xyz/v1"
-                        value={customEndpointUrl}
-                        onChange={(e) => {
-                          setCustomEndpointUrl(e.target.value);
-                          setCustomEndpointTestResult(null);
-                        }}
-                      />
-                    </div>
-
-                    <label style={{ marginTop: '12px' }}>API Key <span style={{ fontWeight: 'normal', opacity: 0.7 }}>(optional for local servers)</span></label>
-                    <div className="api-key-input-row">
-                      <input
-                        type="password"
-                        placeholder={settings?.custom_endpoint_url ? '••••••••••••••••' : 'Enter API key'}
-                        value={customEndpointApiKey}
-                        onChange={(e) => {
-                          setCustomEndpointApiKey(e.target.value);
-                          setCustomEndpointTestResult(null);
-                        }}
-                      />
-                      <button
-                        className="test-button"
-                        onClick={handleTestCustomEndpoint}
-                        disabled={!customEndpointName || !customEndpointUrl || isTestingCustomEndpoint}
-                      >
-                        {isTestingCustomEndpoint ? 'Testing...' : 'Connect'}
-                      </button>
-                    </div>
-
-                    {/* Show configured status when endpoint is saved */}
-                    {settings?.custom_endpoint_url && (
-                      <div className="key-status set">
-                        ✓ Endpoint configured
-                        {customEndpointModels.length > 0 && ` · ${customEndpointModels.length} models available`}
-                      </div>
-                    )}
-                    {customEndpointTestResult && (
-                      <div className={`test-result ${customEndpointTestResult.success ? 'success' : 'error'}`}>
-                        {customEndpointTestResult.message}
-                      </div>
-                    )}
-                  </form>
-                </div>
-              </section>
+              <ProviderSettings
+                settings={settings}
+                // OpenRouter
+                openrouterApiKey={openrouterApiKey}
+                setOpenrouterApiKey={(val) => { setOpenrouterApiKey(val); setOpenrouterTestResult(null); }}
+                handleTestOpenRouter={handleTestOpenRouter}
+                isTestingOpenRouter={isTestingOpenRouter}
+                openrouterTestResult={openrouterTestResult}
+                // Groq
+                groqApiKey={groqApiKey}
+                setGroqApiKey={(val) => { setGroqApiKey(val); setGroqTestResult(null); }}
+                handleTestGroq={handleTestGroq}
+                isTestingGroq={isTestingGroq}
+                groqTestResult={groqTestResult}
+                // Ollama
+                ollamaBaseUrl={ollamaBaseUrl}
+                setOllamaBaseUrl={(val) => { setOllamaBaseUrl(val); setOllamaTestResult(null); }}
+                handleTestOllama={handleTestOllama}
+                isTestingOllama={isTestingOllama}
+                ollamaTestResult={ollamaTestResult}
+                ollamaStatus={ollamaStatus}
+                loadOllamaModels={loadOllamaModels}
+                // Direct
+                directKeys={directKeys}
+                setDirectKeys={setDirectKeys}
+                handleTestDirectKey={handleTestDirectKey}
+                validatingKeys={validatingKeys}
+                keyValidationStatus={keyValidationStatus}
+                // Custom Endpoint
+                customEndpointName={customEndpointName}
+                setCustomEndpointName={(val) => { setCustomEndpointName(val); setCustomEndpointTestResult(null); }}
+                customEndpointUrl={customEndpointUrl}
+                setCustomEndpointUrl={(val) => { setCustomEndpointUrl(val); setCustomEndpointTestResult(null); }}
+                customEndpointApiKey={customEndpointApiKey}
+                setCustomEndpointApiKey={(val) => { setCustomEndpointApiKey(val); setCustomEndpointTestResult(null); }}
+                handleTestCustomEndpoint={handleTestCustomEndpoint}
+                isTestingCustomEndpoint={isTestingCustomEndpoint}
+                customEndpointTestResult={customEndpointTestResult}
+                customEndpointModels={customEndpointModels}
+              />
             )}
 
             {/* COUNCIL CONFIGURATION */}
             {activeSection === 'council' && (
-              <>
-                <section className="settings-section">
-                  <h3>Available Model Sources</h3>
-                  <p className="section-description">
-                    Toggle which providers are available for the search generator, council members, and chairman.
-                    <br /><em style={{ opacity: 0.7, fontSize: '12px' }}>Note: Non-chat models (embeddings, image generation, speech, OCR, etc.) are automatically filtered out.</em>
-                  </p>
-
-                  <div className="hybrid-settings-card">
-                    {/* Primary Sources */}
-                    <div className="filter-group">
-                      <label className="toggle-wrapper">
-                        <div className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={enabledProviders.openrouter}
-                            onChange={(e) => setEnabledProviders(prev => ({ ...prev, openrouter: e.target.checked }))}
-                          />
-                          <span className="slider"></span>
-                        </div>
-                        <span className="toggle-text">OpenRouter (Cloud)</span>
-                      </label>
-
-                      <label className="toggle-wrapper">
-                        <div className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={enabledProviders.ollama}
-                            onChange={(e) => setEnabledProviders(prev => ({ ...prev, ollama: e.target.checked }))}
-                          />
-                          <span className="slider"></span>
-                        </div>
-                        <span className="toggle-text">Local (Ollama)</span>
-                      </label>
-
-                      <label className="toggle-wrapper">
-                        <div className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={enabledProviders.groq}
-                            onChange={(e) => setEnabledProviders(prev => ({ ...prev, groq: e.target.checked }))}
-                          />
-                          <span className="slider"></span>
-                        </div>
-                        <span className="toggle-text">Groq (Fast Inference)</span>
-                      </label>
-
-                      {/* Custom Endpoint Toggle - only show if configured */}
-                      {(settings?.custom_endpoint_url || customEndpointUrl) && (
-                        <label className="toggle-wrapper">
-                          <div className="toggle-switch">
-                            <input
-                              type="checkbox"
-                              checked={enabledProviders.custom}
-                              onChange={(e) => setEnabledProviders(prev => ({ ...prev, custom: e.target.checked }))}
-                            />
-                            <span className="slider"></span>
-                          </div>
-                          <span className="toggle-text">{settings?.custom_endpoint_name || customEndpointName || 'Custom Endpoint'}</span>
-                        </label>
-                      )}
-                    </div>
-
-                    <div className="filter-divider"></div>
-
-                    {/* Direct Connections Master Toggle */}
-                    <div className="filter-group" style={{ marginBottom: '12px' }}>
-                      <label className="toggle-wrapper">
-                        <div className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={enabledProviders.direct}
-                            onChange={(e) => {
-                              const isEnabled = e.target.checked;
-                              setEnabledProviders(prev => ({ ...prev, direct: isEnabled }));
-                              // If master turned off, disable all children
-                              if (!isEnabled) {
-                                setDirectProviderToggles({
-                                  openai: false,
-                                  anthropic: false,
-                                  google: false,
-                                  mistral: false,
-                                  deepseek: false
-                                });
-                              }
-                            }}
-                          />
-                          <span className="slider"></span>
-                        </div>
-                        <span className="toggle-text">Direct Connections</span>
-                      </label>
-                    </div>
-
-                    {/* Individual Direct Provider Toggles (purple) */}
-                    <div className="direct-grid" style={{ opacity: enabledProviders.direct ? 1 : 0.7 }}>
-                      {DIRECT_PROVIDERS.map(dp => (
-                        <label key={dp.id} className="toggle-wrapper">
-                          <div className="toggle-switch direct-toggle">
-                            <input
-                              type="checkbox"
-                              checked={directProviderToggles[dp.id]}
-                              onChange={(e) => {
-                                const isEnabled = e.target.checked;
-                                setDirectProviderToggles(prev => {
-                                  const newState = { ...prev, [dp.id]: isEnabled };
-
-                                  // Auto-enable master if any child is enabled
-                                  if (isEnabled && !enabledProviders.direct) {
-                                    setEnabledProviders(prevEP => ({ ...prevEP, direct: true }));
-                                  }
-
-                                  // Auto-disable master if ALL children are disabled
-                                  const hasAnyEnabled = Object.values(newState).some(v => v);
-                                  if (!hasAnyEnabled && enabledProviders.direct) {
-                                    setEnabledProviders(prevEP => ({ ...prevEP, direct: false }));
-                                  }
-
-                                  return newState;
-                                });
-                              }}
-                            />
-                            <span className="slider"></span>
-                          </div>
-                          <span className="toggle-text" style={{ fontSize: '13px' }}>
-                            {dp.name}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </section>
-
-                <section className="settings-section">
-                  <h3>Council Composition</h3>
-                  <div className="model-options-row">
-                    <div className="model-filter-controls">
-                      <label className="free-filter-label" style={{ opacity: enabledProviders.openrouter ? 1 : 0.3, cursor: enabledProviders.openrouter ? 'pointer' : 'not-allowed' }}>
-                        <input
-                          type="checkbox"
-                          checked={showFreeOnly}
-                          onChange={e => setShowFreeOnly(e.target.checked)}
-                          disabled={!enabledProviders.openrouter}
-                        />
-                        Show free OpenRouter models only
-                        <div className="info-tooltip-container">
-                          <span className="info-icon">i</span>
-                          <div className="info-tooltip">
-                            Free OpenRouter models are limited to 20 requests/minute and 50/day (without credits). Large councils generate many requests at once.
-                          </div>
-                        </div>
-                      </label>
-                      {isLoadingModels && <span className="loading-models">Loading models...</span>}
-                    </div>
-                  </div>
-                  <div className="lucky-button-container">
-                    <button
-                      type="button"
-                      className="lucky-button"
-                      onClick={handleFeelingLucky}
-                      title="Randomize models from enabled sources"
-                    >
-                      🎲 I'm Feeling Lucky
-                    </button>
-                  </div>
-                  {/* Council Members */}                                  <div className="subsection" style={{ marginTop: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                      <h4 style={{ margin: 0 }}>Council Members</h4>
-                    </div>
-                    <div className="council-members">
-                      {councilModels.map((modelId, index) => {
-                        const memberFilter = getMemberFilter(index);
-                        return (
-                          <div key={index} className="council-member-row">
-                            <span className="member-label">Member {index + 1}</span>
-                            <div className="model-type-toggle">
-                              <button
-                                type="button"
-                                className={`type-btn ${memberFilter === 'remote' ? 'active' : ''}`}
-                                onClick={() => handleMemberFilterChange(index, 'remote')}
-                                disabled={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq && !enabledProviders.custom}
-                                title={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq && !enabledProviders.custom ? 'Enable a remote provider first' : ''}
-                              >
-                                Remote
-                              </button>
-                              <button
-                                type="button"
-                                className={`type-btn ${memberFilter === 'local' ? 'active' : ''}`}
-                                onClick={() => handleMemberFilterChange(index, 'local')}
-                                disabled={!enabledProviders.ollama || ollamaAvailableModels.length === 0}
-                                title={!enabledProviders.ollama || ollamaAvailableModels.length === 0 ? 'Enable and connect Ollama first' : ''}
-                              >
-                                Local
-                              </button>
-                            </div>
-                            <div className="model-select-wrapper">
-                              <SearchableModelSelect
-                                models={filterByRemoteLocal(getFilteredAvailableModels(), memberFilter)}
-                                value={modelId}
-                                onChange={(value) => handleCouncilModelChange(index, value)}
-                                placeholder={isLoadingModels && availableModels.length === 0 ? "Loading models..." : "Search models..."}
-                                isDisabled={isLoadingModels && availableModels.length === 0}
-                                isLoading={isLoadingModels}
-                                allModels={getAllAvailableModels()}
-                              />
-                            </div>
-                            {index >= 2 && (
-                              <button
-                                type="button"
-                                className="remove-member-button"
-                                onClick={() => handleRemoveCouncilMember(index)}
-                                title="Remove member"
-                              >
-                                ×
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <button
-                      type="button"
-                      className="add-member-button"
-                      onClick={handleAddCouncilMember}
-                      disabled={getFilteredAvailableModels().length === 0 || councilModels.length >= 8}
-                    >
-                      + Add Council Member
-                    </button>
-                    <p className="section-description" style={{ marginTop: '8px', marginBottom: '0' }}>
-                      Max 8 members. With 6+ members, requests are processed in batches.
-                    </p>
-                    {councilModels.length >= 6 && (
-                      <div className="council-size-warning">
-                        ⚠️ <strong>6+ members:</strong> Requests will be processed in batches of 3 to avoid rate limits.
-                      </div>
-                    )}
-
-                    {/* Rate Limit Warning Banner */}
-                    {rateLimitWarning && (
-                      <div className={`rate-limit-warning ${rateLimitWarning.type}`}>
-                        <span className="warning-icon">
-                          {rateLimitWarning.type === 'error' ? '🛑' : '⚠️'}
-                        </span>
-                        <div>
-                          <strong>{rateLimitWarning.title}</strong><br />
-                          {rateLimitWarning.message}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Council Heat Slider */}
-                    <div className="subsection" style={{ marginTop: '20px' }}>
-                      <div className="heat-slider-header">
-                        <h4>Council Heat</h4>
-                        <span className="heat-value">{councilTemperature.toFixed(1)}</span>
-                      </div>
-                      <div className="heat-slider-container">
-                        <span className="heat-icon cold">❄️</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={councilTemperature}
-                          onChange={(e) => setCouncilTemperature(parseFloat(e.target.value))}
-                          className="heat-slider"
-                          disabled={councilModels.every(m => m.includes('gpt-5.1') || m.includes('o1-') || m.includes('o3-'))}
-                        />
-                        <span className="heat-icon hot">🔥</span>
-                      </div>
-                      {councilModels.some(m => m.includes('gpt-5.1') || m.includes('o1-') || m.includes('o3-')) && (
-                        <div className="heat-warning">
-                          ⚠️ Some selected models (e.g. GPT-5.1, o1) enforce fixed temperature and will ignore this setting.
-                        </div>
-                      )}
-                      <p className="heat-note" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>
-                        ℹ️ Stage 2 (Peer Ranking) has its own temperature setting.{' '}
-                        <button
-                          type="button"
-                          onClick={() => { setActiveSection('prompts'); setActivePromptTab('stage2'); }}
-                          style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '11px' }}
-                        >
-                          Configure in System Prompts → Stage 2
-                        </button>
-                      </p>
-                    </div>
-                  </div>
-                  {/* Chairman */}
-                  <div className="subsection" style={{ marginTop: '24px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <h4 style={{ margin: 0 }}>Chairman Model</h4>
-                      <div className="model-type-toggle">
-                        <button
-                          type="button"
-                          className={`type-btn ${chairmanFilter === 'remote' ? 'active' : ''}`}
-                          onClick={() => {
-                            setChairmanFilter('remote');
-                            setChairmanModel('');
-                          }}
-                          disabled={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq && !enabledProviders.custom}
-                          title={!enabledProviders.openrouter && !enabledProviders.direct && !enabledProviders.groq && !enabledProviders.custom ? 'Enable a remote provider first' : ''}
-                        >
-                          Remote
-                        </button>
-                        <button
-                          type="button"
-                          className={`type-btn ${chairmanFilter === 'local' ? 'active' : ''}`}
-                          onClick={() => {
-                            setChairmanFilter('local');
-                            setChairmanModel('');
-                          }}
-                          disabled={!enabledProviders.ollama || ollamaAvailableModels.length === 0}
-                          title={!enabledProviders.ollama || ollamaAvailableModels.length === 0 ? 'Enable and connect Ollama first' : ''}
-                        >
-                          Local
-                        </button>
-                      </div>
-                    </div>
-                    <div className="chairman-selection">
-                      <SearchableModelSelect
-                        models={filterByRemoteLocal(getFilteredAvailableModels(), chairmanFilter)}
-                        value={chairmanModel}
-                        onChange={(value) => setChairmanModel(value)}
-                        placeholder="Search models..."
-                        isLoading={isLoadingModels}
-                        allModels={getAllAvailableModels()}
-                      />
-                    </div>
-
-                    {/* Chairman Heat Slider */}
-                    <div className="subsection" style={{ marginTop: '16px' }}>
-                      <div className="heat-slider-header">
-                        <h4>Chairman Heat</h4>
-                        <span className="heat-value">{chairmanTemperature.toFixed(1)}</span>
-                      </div>
-                      <div className="heat-slider-container">
-                        <span className="heat-icon cold">❄️</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={chairmanTemperature}
-                          onChange={(e) => setChairmanTemperature(parseFloat(e.target.value))}
-                          className="heat-slider"
-                          disabled={chairmanModel.includes('gpt-5.1') || chairmanModel.includes('o1-') || chairmanModel.includes('o3-')}
-                        />
-                        <span className="heat-icon hot">🔥</span>
-                      </div>
-                      {(chairmanModel.includes('gpt-5.1') || chairmanModel.includes('o1-') || chairmanModel.includes('o3-')) && (
-                        <div className="heat-warning">
-                          ⚠️ This model enforces fixed temperature and will ignore this setting.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                </section>
-              </>
+              <CouncilConfig
+                settings={settings}
+                // State
+                enabledProviders={enabledProviders}
+                setEnabledProviders={setEnabledProviders}
+                directProviderToggles={directProviderToggles}
+                setDirectProviderToggles={setDirectProviderToggles}
+                showFreeOnly={showFreeOnly}
+                setShowFreeOnly={setShowFreeOnly}
+                isLoadingModels={isLoadingModels}
+                rateLimitWarning={rateLimitWarning}
+                councilModels={councilModels}
+                councilMemberFilters={councilMemberFilters}
+                chairmanModel={chairmanModel}
+                setChairmanModel={setChairmanModel}
+                chairmanFilter={chairmanFilter}
+                setChairmanFilter={setChairmanFilter}
+                councilTemperature={councilTemperature}
+                setCouncilTemperature={setCouncilTemperature}
+                chairmanTemperature={chairmanTemperature}
+                setChairmanTemperature={setChairmanTemperature}
+                // Data
+                allModels={getAllAvailableModels()}
+                filteredModels={getFilteredAvailableModels()}
+                ollamaAvailableModels={ollamaAvailableModels}
+                customEndpointName={customEndpointName}
+                customEndpointUrl={customEndpointUrl}
+                // Callbacks
+                handleFeelingLucky={handleFeelingLucky}
+                handleMemberFilterChange={handleMemberFilterChange}
+                handleCouncilModelChange={handleCouncilModelChange}
+                handleRemoveCouncilMember={handleRemoveCouncilMember}
+                handleAddCouncilMember={handleAddCouncilMember}
+                setActiveSection={setActiveSection}
+                setActivePromptTab={setActivePromptTab}
+              />
             )}
 
             {/* SYSTEM PROMPTS */}
             {activeSection === 'prompts' && (
-              <section className="settings-section">
-                <h3>System Prompts</h3>
-                <p className="section-description">
-                  Customize the instructions given to the models at each stage.
-                </p>
-
-                <div className="prompts-tabs">
-                  <button
-                    className={`prompt-tab ${activePromptTab === 'stage1' ? 'active' : ''}`}
-                    onClick={() => setActivePromptTab('stage1')}
-                  >
-                    Stage 1
-                  </button>
-                  <button
-                    className={`prompt-tab ${activePromptTab === 'stage2' ? 'active' : ''}`}
-                    onClick={() => setActivePromptTab('stage2')}
-                  >
-                    Stage 2
-                  </button>
-                  <button
-                    className={`prompt-tab ${activePromptTab === 'stage3' ? 'active' : ''}`}
-                    onClick={() => setActivePromptTab('stage3')}
-                  >
-                    Stage 3
-                  </button>
-                </div>
-
-                <div className="prompt-editor">
-                  {activePromptTab === 'stage1' && (
-                    <div className="prompt-content">
-                      <label>Stage 1: Initial Response</label>
-                      <p className="section-description" style={{ marginBottom: '10px' }}>
-                        Guides council members' initial responses to user questions.
-                      </p>
-                      <p className="prompt-help">Variables: <code>{'{user_query}'}</code>, <code>{'{search_context_block}'}</code></p>
-                      <textarea
-                        value={prompts.stage1_prompt}
-                        onChange={(e) => handlePromptChange('stage1_prompt', e.target.value)}
-                        rows={15}
-                      />
-                      <button className="reset-prompt-btn" onClick={() => handleResetPrompt('stage1_prompt')}>Reset to Default</button>
-                    </div>
-                  )}
-                  {activePromptTab === 'stage2' && (
-                    <div className="prompt-content">
-                      <label>Stage 2: Peer Ranking</label>
-
-                      {/* Stage 2 Temperature Slider - Positioned prominently */}
-                      <div className="stage2-heat-section" style={{ marginTop: '12px', marginBottom: '16px', padding: '15px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                        <div className="heat-slider-header">
-                          <h4 style={{ margin: 0, fontSize: '14px', color: '#e2e8f0' }}>Stage 2 Heat</h4>
-                          <span className="heat-value">{stage2Temperature.toFixed(1)}</span>
-                        </div>
-                        <p className="section-description" style={{ fontSize: '12px', margin: '8px 0' }}>
-                          Lower temperature recommended for consistent, parseable ranking output.
-                        </p>
-                        <div className="heat-slider-container">
-                          <span className="heat-icon cold">❄️</span>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.1"
-                            value={stage2Temperature}
-                            onChange={(e) => setStage2Temperature(parseFloat(e.target.value))}
-                            className="heat-slider"
-                          />
-                          <span className="heat-icon hot">🔥</span>
-                        </div>
-                      </div>
-
-                      <p className="section-description" style={{ marginBottom: '10px' }}>
-                        Instructs models how to rank and evaluate peer responses.
-                      </p>
-                      <p className="prompt-help">Variables: <code>{'{user_query}'}</code>, <code>{'{responses_text}'}</code>, <code>{'{search_context_block}'}</code></p>
-                      <textarea
-                        value={prompts.stage2_prompt}
-                        onChange={(e) => handlePromptChange('stage2_prompt', e.target.value)}
-                        rows={15}
-                      />
-                      <button className="reset-prompt-btn" onClick={() => handleResetPrompt('stage2_prompt')}>Reset to Default</button>
-                    </div>
-                  )}
-                  {activePromptTab === 'stage3' && (
-                    <div className="prompt-content">
-                      <label>Stage 3: Chairman Synthesis</label>
-                      <p className="section-description" style={{ marginBottom: '10px' }}>
-                        Directs the chairman to synthesize a final answer from all inputs.
-                      </p>
-                      <p className="prompt-help">Variables: <code>{'{user_query}'}</code>, <code>{'{stage1_text}'}</code>, <code>{'{stage2_text}'}</code>, <code>{'{search_context_block}'}</code></p>
-                      <textarea
-                        value={prompts.stage3_prompt}
-                        onChange={(e) => handlePromptChange('stage3_prompt', e.target.value)}
-                        rows={15}
-                      />
-                      <button className="reset-prompt-btn" onClick={() => handleResetPrompt('stage3_prompt')}>Reset to Default</button>
-                    </div>
-                  )}
-                </div>
-              </section>
+              <PromptSettings
+                prompts={prompts}
+                handlePromptChange={handlePromptChange}
+                handleResetPrompt={handleResetPrompt}
+                activePromptTab={activePromptTab}
+                setActivePromptTab={setActivePromptTab}
+                stage2Temperature={stage2Temperature}
+                setStage2Temperature={setStage2Temperature}
+              />
             )}
 
             {/* SEARCH PROVIDERS (New Section) */}
             {activeSection === 'search' && (
-              <section className="settings-section">
-                <h3>Web Search Provider</h3>
-                <div className="provider-options">
-                  {SEARCH_PROVIDERS.map(provider => (
-                    <div key={provider.id} className={`provider-option-container ${selectedSearchProvider === provider.id ? 'selected' : ''}`}>
-                      <label className="provider-option">
-                        <input
-                          type="radio"
-                          name="search_provider"
-                          value={provider.id}
-                          checked={selectedSearchProvider === provider.id}
-                          onChange={() => setSelectedSearchProvider(provider.id)}
-                        />
-                        <div className="provider-info">
-                          <span className="provider-name">{provider.name}</span>
-                          <span className="provider-description">{provider.description}</span>
-                        </div>
-                      </label>
-
-                      {/* Inline API Key Input for Tavily */}
-                      {selectedSearchProvider === 'tavily' && provider.id === 'tavily' && (
-                        <div className="inline-api-key-section">
-                          <div className="api-key-input-row">
-                            <input
-                              type="password"
-                              placeholder={settings.tavily_api_key_set ? '••••••••••••••••' : 'Enter Tavily API key'}
-                              value={tavilyApiKey}
-                              onChange={e => {
-                                setTavilyApiKey(e.target.value);
-                                setTavilyTestResult(null);
-                              }}
-                              className={settings.tavily_api_key_set && !tavilyApiKey ? 'key-configured' : ''}
-                            />
-                            <button
-                              type="button"
-                              className="test-button"
-                              onClick={handleTestTavily}
-                              disabled={isTestingTavily || (!tavilyApiKey && !settings.tavily_api_key_set)}
-                            >
-                              {isTestingTavily ? 'Testing...' : (settings.tavily_api_key_set && !tavilyApiKey ? 'Retest' : 'Test')}
-                            </button>
-                          </div>
-                          {settings.tavily_api_key_set && !tavilyApiKey && (
-                            <div className="key-status set">✓ API key configured</div>
-                          )}
-                          {tavilyTestResult && (
-                            <div className={`test-result ${tavilyTestResult.success ? 'success' : 'error'}`}>
-                              {tavilyTestResult.success ? '✓' : '✗'} {tavilyTestResult.message}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Inline API Key Input for Brave */}
-                      {selectedSearchProvider === 'brave' && provider.id === 'brave' && (
-                        <div className="inline-api-key-section">
-                          <div className="api-key-input-row">
-                            <input
-                              type="password"
-                              placeholder={settings.brave_api_key_set ? '••••••••••••••••' : 'Enter Brave API key'}
-                              value={braveApiKey}
-                              onChange={e => {
-                                setBraveApiKey(e.target.value);
-                                setBraveTestResult(null);
-                              }}
-                              className={settings.brave_api_key_set && !braveApiKey ? 'key-configured' : ''}
-                            />
-                            <button
-                              type="button"
-                              className="test-button"
-                              onClick={handleTestBrave}
-                              disabled={isTestingBrave || (!braveApiKey && !settings.brave_api_key_set)}
-                            >
-                              {isTestingBrave ? 'Testing...' : (settings.brave_api_key_set && !braveApiKey ? 'Retest' : 'Test')}
-                            </button>
-                          </div>
-                          {settings.brave_api_key_set && !braveApiKey && (
-                            <div className="key-status set">✓ API key configured</div>
-                          )}
-                          {braveTestResult && (
-                            <div className={`test-result ${braveTestResult.success ? 'success' : 'error'}`}>
-                              {braveTestResult.success ? '✓' : '✗'} {braveTestResult.message}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="full-content-section">
-                  <label>Full Article Fetch (Jina AI)</label>
-                  <p className="setting-description">
-                    Uses Jina AI to read the full text of the top search results.
-                    <strong> Set to 0 to disable.</strong>
-                  </p>
-                  <div className="full-content-input-row">
-                    <input
-                      type="range"
-                      min="0"
-                      max="5"
-                      value={fullContentResults}
-                      onChange={e => setFullContentResults(parseInt(e.target.value, 10))}
-                      className="full-content-slider"
-                    />
-                    <span className="full-content-value">{fullContentResults} results</span>
-                  </div>
-                </div>
-
-                <div className="keyword-extraction-section" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <label>Search Query Processing</label>
-                  <p className="setting-description">
-                    Choose how your prompt is sent to the search engine.
-                  </p>
-
-                  <div className="provider-options">
-                    <div className={`provider-option-container ${searchKeywordExtraction === 'direct' ? 'selected' : ''}`}>
-                      <label className="provider-option">
-                        <input
-                          type="radio"
-                          name="keyword_extraction"
-                          value="direct"
-                          checked={searchKeywordExtraction === 'direct'}
-                          onChange={() => setSearchKeywordExtraction('direct')}
-                        />
-                        <div className="provider-info">
-                          <span className="provider-name">Direct (Recommended)</span>
-                          <span className="provider-description">
-                            Send your exact query to the search engine. Best for modern semantic search engines like Tavily and Brave.
-                          </span>
-                        </div>
-                      </label>
-                    </div>
-
-                    <div className={`provider-option-container ${searchKeywordExtraction === 'yake' ? 'selected' : ''}`}>
-                      <label className="provider-option">
-                        <input
-                          type="radio"
-                          name="keyword_extraction"
-                          value="yake"
-                          checked={searchKeywordExtraction === 'yake'}
-                          onChange={() => setSearchKeywordExtraction('yake')}
-                        />
-                        <div className="provider-info">
-                          <span className="provider-name">Smart Keywords (Yake)</span>
-                          <span className="provider-description">
-                            Extract key terms from your prompt before searching. Useful if you paste very long prompts that confuse the search engine.
-                          </span>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </section>
+              <SearchSettings
+                settings={settings}
+                selectedSearchProvider={selectedSearchProvider}
+                setSelectedSearchProvider={setSelectedSearchProvider}
+                // Tavily
+                tavilyApiKey={tavilyApiKey}
+                setTavilyApiKey={setTavilyApiKey}
+                handleTestTavily={handleTestTavily}
+                isTestingTavily={isTestingTavily}
+                tavilyTestResult={tavilyTestResult}
+                setTavilyTestResult={setTavilyTestResult}
+                // Brave
+                braveApiKey={braveApiKey}
+                setBraveApiKey={setBraveApiKey}
+                handleTestBrave={handleTestBrave}
+                isTestingBrave={isTestingBrave}
+                braveTestResult={braveTestResult}
+                setBraveTestResult={setBraveTestResult}
+                // Other Settings
+                fullContentResults={fullContentResults}
+                setFullContentResults={setFullContentResults}
+                searchKeywordExtraction={searchKeywordExtraction}
+                setSearchKeywordExtraction={setSearchKeywordExtraction}
+              />
             )}
 
             {/* IMPORT & EXPORT (New Section) */}
@@ -2301,6 +1468,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                   <ul style={{ margin: '12px 0', lineHeight: '1.8' }}>
                     <li>Provider toggles → All disabled</li>
                     <li>Model selections → Cleared</li>
+                    <li>Council size → Reset to 2 members</li>
                     <li>Temperatures → Defaults (0.5 / 0.4 / 0.3)</li>
                     <li>System prompts → Defaults</li>
                     <li>Search provider → DuckDuckGo</li>

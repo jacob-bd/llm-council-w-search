@@ -339,7 +339,13 @@ class UpdateSettingsRequest(BaseModel):
     # Remote/Local filters
     council_member_filters: Optional[Dict[int, str]] = None
     chairman_filter: Optional[str] = None
-    
+    search_query_filter: Optional[str] = None
+
+    # Temperature Settings
+    council_temperature: Optional[float] = None
+    chairman_temperature: Optional[float] = None
+    stage2_temperature: Optional[float] = None
+
     # Execution Mode
     execution_mode: Optional[str] = None
 
@@ -352,7 +358,7 @@ class UpdateSettingsRequest(BaseModel):
 
 class TestTavilyRequest(BaseModel):
     """Request to test Tavily API key."""
-    api_key: str
+    api_key: str | None = None
 
 
 @app.get("/api/settings")
@@ -392,7 +398,14 @@ async def get_app_settings():
         
         # Remote/Local filters
         "council_member_filters": settings.council_member_filters,
+        "council_member_filters": settings.council_member_filters,
         "chairman_filter": settings.chairman_filter,
+        "search_query_filter": settings.search_query_filter,
+
+        # Temperature Settings
+        "council_temperature": settings.council_temperature,
+        "chairman_temperature": settings.chairman_temperature,
+        "stage2_temperature": settings.stage2_temperature,
 
         # Prompts
         "stage1_prompt": settings.stage1_prompt,
@@ -533,8 +546,18 @@ async def update_app_settings(request: UpdateSettingsRequest):
         updates["council_member_filters"] = request.council_member_filters
     if request.chairman_filter is not None:
         updates["chairman_filter"] = request.chairman_filter
-    
-    # Execution Mode
+    if request.search_query_filter is not None:
+        updates["search_query_filter"] = request.search_query_filter
+
+    # Temperature Settings
+    if request.council_temperature is not None:
+        updates["council_temperature"] = request.council_temperature
+    if request.chairman_temperature is not None:
+        updates["chairman_temperature"] = request.chairman_temperature
+    if request.stage2_temperature is not None:
+        updates["stage2_temperature"] = request.stage2_temperature
+
+    # Prompts   # Execution Mode
     if request.execution_mode is not None:
         valid_modes = ["chat_only", "chat_ranking", "full"]
         if request.execution_mode not in valid_modes:
@@ -629,13 +652,14 @@ async def get_direct_models():
 async def test_tavily_api(request: TestTavilyRequest):
     """Test Tavily API key with a simple search."""
     import httpx
+    settings = get_settings()
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 "https://api.tavily.com/search",
                 json={
-                    "api_key": request.api_key,
+                    "api_key": request.api_key or settings.tavily_api_key,
                     "query": "test",
                     "max_results": 1,
                     "search_depth": "basic",
@@ -657,13 +681,14 @@ async def test_tavily_api(request: TestTavilyRequest):
 
 class TestBraveRequest(BaseModel):
     """Request to test Brave API key."""
-    api_key: str
+    api_key: str | None = None
 
 
 @app.post("/api/settings/test-brave")
 async def test_brave_api(request: TestBraveRequest):
     """Test Brave API key with a simple search."""
     import httpx
+    settings = get_settings()
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -672,7 +697,8 @@ async def test_brave_api(request: TestBraveRequest):
                 params={"q": "test", "count": 1},
                 headers={
                     "Accept": "application/json",
-                    "X-Subscription-Token": request.api_key,
+                    "Accept-Encoding": "gzip",
+                    "X-Subscription-Token": request.api_key or settings.brave_api_key,
                 },
             )
 
@@ -704,12 +730,25 @@ class TestProviderRequest(BaseModel):
 async def test_provider_api(request: TestProviderRequest):
     """Test an API key for a specific provider."""
     from .council import PROVIDERS
+    from .settings import get_settings
     
     if request.provider_id not in PROVIDERS:
         raise HTTPException(status_code=400, detail="Invalid provider ID")
         
+    api_key = request.api_key
+    if not api_key:
+        # Try to get from settings
+        settings = get_settings()
+        # Map provider_id to setting key (e.g. 'openai' -> 'openai_api_key')
+        setting_key = f"{request.provider_id}_api_key"
+        if hasattr(settings, setting_key):
+             api_key = getattr(settings, setting_key)
+    
+    if not api_key:
+         return {"success": False, "message": "No API key provided or configured"}
+
     provider = PROVIDERS[request.provider_id]
-    return await provider.validate_key(request.api_key)
+    return await provider.validate_key(api_key)
 
 
 class TestOllamaRequest(BaseModel):

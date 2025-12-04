@@ -301,7 +301,11 @@ async def stage2_collect_rankings(
                             if not isinstance(full_text, str):
                                 # Handle case where API returns non-string content (array, object, etc.)
                                 full_text = str(full_text) if full_text is not None else ''
-                            parsed = parse_ranking_from_text(full_text)
+                            
+                            # Parse with expected count to avoid duplicates
+                            expected_count = len(successful_results)
+                            parsed = parse_ranking_from_text(full_text, expected_count=expected_count)
+                            
                             result = {
                                 "model": model,
                                 "ranking": full_text,
@@ -377,7 +381,21 @@ async def stage3_synthesize_final(
         logger.warning(f"Error formatting Stage 3 prompt: {e}. Using fallback.")
         chairman_prompt = f"Question: {user_query}\n\nSynthesis required."
 
-    messages = [{"role": "user", "content": chairman_prompt}]
+    # Determine message structure based on whether the prompt is default or custom
+    from .prompts import STAGE3_PROMPT_DEFAULT
+    
+    # Check if we are using the default prompt (or if it's empty/None, which falls back to default)
+    is_default_prompt = (not settings.stage3_prompt) or (settings.stage3_prompt.strip() == STAGE3_PROMPT_DEFAULT.strip())
+
+    if is_default_prompt:
+        # If using default, split into System (Persona) and User (Data) for better adherence at low temp
+        messages = [
+            {"role": "system", "content": "You are the Chairman of an LLM Council. Your task is to synthesize the provided model responses into a single, comprehensive answer."},
+            {"role": "user", "content": chairman_prompt}
+        ]
+    else:
+        # If custom prompt, send as single User message to respect user's custom persona/structure
+        messages = [{"role": "user", "content": chairman_prompt}]
 
     # Query the chairman model with error handling
     chairman_model = get_chairman_model()
@@ -412,12 +430,13 @@ async def stage3_synthesize_final(
         }
 
 
-def parse_ranking_from_text(ranking_text: str) -> List[str]:
+def parse_ranking_from_text(ranking_text: str, expected_count: int = None) -> List[str]:
     """
     Parse the FINAL RANKING section from the model's response.
 
     Args:
         ranking_text: The full text response from the model
+        expected_count: Optional number of expected ranked items (to truncate duplicates)
 
     Returns:
         List of response labels in ranked order
@@ -427,6 +446,8 @@ def parse_ranking_from_text(ranking_text: str) -> List[str]:
     # Defensive: ensure ranking_text is a string
     if not isinstance(ranking_text, str):
         ranking_text = str(ranking_text) if ranking_text is not None else ''
+
+    matches = []
 
     # Look for "FINAL RANKING:" section
     if "FINAL RANKING:" in ranking_text:
@@ -439,14 +460,19 @@ def parse_ranking_from_text(ranking_text: str) -> List[str]:
             numbered_matches = re.findall(r'\d+\.\s*Response [A-Z]', ranking_section)
             if numbered_matches:
                 # Extract just the "Response X" part
-                return [re.search(r'Response [A-Z]', m).group() for m in numbered_matches]
+                matches = [re.search(r'Response [A-Z]', m).group() for m in numbered_matches]
+            else:
+                # Fallback: Extract all "Response X" patterns in order from the section
+                matches = re.findall(r'Response [A-Z]', ranking_section)
+    
+    # If no matches found in section (or section missing), fallback to full text search
+    if not matches:
+        matches = re.findall(r'Response [A-Z]', ranking_text)
 
-            # Fallback: Extract all "Response X" patterns in order
-            matches = re.findall(r'Response [A-Z]', ranking_section)
-            return matches
-
-    # Fallback: try to find any "Response X" patterns in order
-    matches = re.findall(r'Response [A-Z]', ranking_text)
+    # Truncate if expected_count is provided
+    if expected_count and len(matches) > expected_count:
+        matches = matches[:expected_count]
+        
     return matches
 
 
@@ -473,7 +499,8 @@ def calculate_aggregate_rankings(
         ranking_text = ranking['ranking']
 
         # Parse the ranking from the structured format
-        parsed_ranking = parse_ranking_from_text(ranking_text)
+        expected_count = len(label_to_model)
+        parsed_ranking = parse_ranking_from_text(ranking_text, expected_count=expected_count)
 
         for position, label in enumerate(parsed_ranking, start=1):
             if label in label_to_model:

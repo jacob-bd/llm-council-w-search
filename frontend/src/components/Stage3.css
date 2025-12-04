@@ -64,6 +64,7 @@
   font-size: 15px;
   font-family: var(--font-content);
 }
+
 /* Premium Gold Theme */
 .final-response {
   background: rgba(30, 41, 59, 0.4);
@@ -83,21 +84,27 @@
   left: -100%;
   width: 50%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.05),
-    transparent
-  );
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 255, 255, 0.05),
+      transparent);
   transform: skewX(-25deg);
   animation: sheen 6s infinite;
   pointer-events: none;
 }
 
 @keyframes sheen {
-  0% { left: -100%; }
-  20% { left: 200%; }
-  100% { left: 200%; }
+  0% {
+    left: -100%;
+  }
+
+  20% {
+    left: 200%;
+  }
+
+  100% {
+    left: 200%;
+  }
 }
 
 .chairman-header {
@@ -148,7 +155,22 @@
   font-size: 18px;
   font-weight: 700;
   font-family: var(--font-ui);
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.chairman-provider-badge {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .final-text {

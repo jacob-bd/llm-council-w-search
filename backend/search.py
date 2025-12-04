@@ -259,7 +259,8 @@ def _search_duckduckgo(query: str, max_results: int = 5, full_content_results: i
     for attempt in range(MAX_RETRIES + 1):
         try:
             with DDGS() as ddgs:
-                search_results = list(ddgs.news(query, max_results=max_results))
+                # Use text search (general web) instead of news for better coverage of facts/prices
+                search_results = list(ddgs.text(query, max_results=max_results))
 
                 for i, result in enumerate(search_results, 1):
                     title = result.get('title', 'No Title')
